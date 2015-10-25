@@ -150,25 +150,25 @@ date_parser_free(LogPipe *s)
 {
   DateParser *self = (DateParser *)s;
 
-  g_free (self->date_format);
-  g_free (self->date_tz);
+  g_free(self->date_format);
+  g_free(self->date_tz);
   if (self->date_tz_info)
-    time_zone_info_free (self->date_tz_info);
+    time_zone_info_free(self->date_tz_info);
 
-  log_parser_free_method (s);
+  log_parser_free_method(s);
 }
 
 LogParser *
 date_parser_new(GlobalConfig *cfg)
 {
-  DateParser *self = g_new0 (DateParser, 1);
-  log_parser_init_instance (&self->super, cfg);
+  DateParser *self = g_new0(DateParser, 1);
+  log_parser_init_instance(&self->super, cfg);
   self->super.super.init = date_parser_init;
   self->super.process = date_parser_process;
   self->super.super.clone = date_parser_clone;
   self->super.super.free_fn = date_parser_free;
 
-  self->date_format = g_strdup ("%FT%T%z");
+  self->date_format = g_strdup("%FT%T%z");
 
   return &self->super;
 }

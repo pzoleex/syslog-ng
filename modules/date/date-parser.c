@@ -57,7 +57,7 @@ date_parser_init(LogPipe *s)
 
   if (self->date_tz_info)
     time_zone_info_free(self->date_tz_info);
-  self->date_tz_info = time_zone_info_new(self->date_tz);
+  self->date_tz_info = self->date_tz ? time_zone_info_new(self->date_tz) : NULL;
   return log_parser_init_method(s);
 }
 

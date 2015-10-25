@@ -22,6 +22,8 @@ testcase(gchar *msg, goffset offset, gchar *timezone, gchar *format, gchar *expe
   if (format != NULL) date_parser_set_format(parser, format);
   if (timezone != NULL) date_parser_set_timezone(parser, timezone);
 
+  log_pipe_init(&parser->super);
+
   parse_options.flags = 0;
   logmsg = log_msg_new_empty();
   logmsg->timestamps[LM_TS_RECVD].tv_sec = 1438793384; /* Wed Aug  5 2015 */

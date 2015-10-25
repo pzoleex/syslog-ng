@@ -47,7 +47,7 @@ const ModuleInfo module_info =
 {
   .canonical_name = "date",
   .version = VERSION,
-  .description = "Experimental date parser.",
+  .description = "date parser",
   .core_revision = VERSION_CURRENT_VER_ONLY,
   .plugins = &date_plugin,
   .plugins_len = 1,

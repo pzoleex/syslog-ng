@@ -24,21 +24,19 @@
 #include "date-parser.h"
 #include "scratch-buffers.h"
 
-#define KEY_BUFFER_LENGTH 1024
-
 typedef struct _DateParser
 {
   LogParser super;
-  goffset date_offset;
+  gint date_offset;
   gchar *date_format;
   gchar *date_tz;
   TimeZoneInfo *date_tz_info;
 } DateParser;
 
 void
-date_parser_set_offset(LogParser *s, goffset offset)
+date_parser_set_offset(LogParser *s, gint offset)
 {
-  DateParser *self = (DateParser *)s;
+  DateParser *self = (DateParser *) s;
   self->date_offset = offset;
 }
 

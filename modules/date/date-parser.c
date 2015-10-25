@@ -66,6 +66,7 @@ static gboolean
 _parse_timestamp_and_deduce_missing_parts(DateParser *self, struct tm *tm, glong *tm_zone_offset, const gchar *input)
 {
   gint current_year;
+  struct tm nowtm = *tm;
 
   current_year = tm->tm_year;
   tm->tm_year = 0;
@@ -82,7 +83,7 @@ _parse_timestamp_and_deduce_missing_parts(DateParser *self, struct tm *tm, glong
     {
       /* no year information in the timestamp, deduce it from the current year */
       tm->tm_year = current_year;
-      tm->tm_year = determine_year_for_month(tm->tm_mon, tm);
+      tm->tm_year = determine_year_for_month(tm->tm_mon, &nowtm);
     }
 
   /* tm->tm_gmtoff is unfortunately not standard and is not available

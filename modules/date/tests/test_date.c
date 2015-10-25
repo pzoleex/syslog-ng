@@ -80,7 +80,7 @@ int main()
   testcase("2015-01-26T16:14:49+03:00 Disappointing log file", NULL, NULL, "2015-01-26T16:14:49+03:00");
 
   /* Dates without timezones. America/Phoenix has no DST */
-  testcase("Tue, 27 Jan 2015 11:48:46", NULL, "%a, %d %b %Y %T", "2015-01-27T11:48:46+00:00");
+  testcase("Tue, 27 Jan 2015 11:48:46", NULL, "%a, %d %b %Y %T", "2015-01-27T11:48:46+01:00");
   testcase("Tue, 27 Jan 2015 11:48:46", "America/Phoenix", "%a, %d %b %Y %T", "2015-01-27T11:48:46-07:00");
   testcase("Tue, 27 Jan 2015 11:48:46", "+05:00", "%a, %d %b %Y %T", "2015-01-27T11:48:46+05:00");
 
@@ -88,8 +88,8 @@ int main()
   testcase("01/Jul:00:40:07 +0500", NULL, "%d/%b:%T %z", "2015-07-01T00:40:07+05:00");
   testcase("01/Aug:00:40:07 +0500", NULL, "%d/%b:%T %z", "2015-08-01T00:40:07+05:00");
   testcase("01/Sep:00:40:07 +0500", NULL, "%d/%b:%T %z", "2015-09-01T00:40:07+05:00");
-  testcase("01/Oct:00:40:07 +0500", NULL, "%d/%b:%T %z", "2014-10-01T00:40:07+05:00");
-  testcase("01/Nov:00:40:07 +0500", NULL, "%d/%b:%T %z", "2014-11-01T00:40:07+05:00");
+  testcase("01/Oct:00:40:07 +0500", NULL, "%d/%b:%T %z", "2015-10-01T00:40:07+05:00");
+  testcase("01/Nov:00:40:07 +0500", NULL, "%d/%b:%T %z", "2015-11-01T00:40:07+05:00");
 
   app_shutdown();
   return 0;

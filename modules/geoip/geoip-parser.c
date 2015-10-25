@@ -170,7 +170,7 @@ geoip_parser_init(LogPipe *s)
 
   if (!self->gi)
     return FALSE;
-  return log_parser_init_method(s)
+  return log_parser_init_method(s);
 }
 
 LogParser *

@@ -20,8 +20,6 @@ set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/Modules ${PROJECT_SOURCE_DIR}/
 set(CMAKE_POSITION_INDEPENDENT_CODE 1)
 set(BISON_FLAGS "-Wno-other")
 
-add_compile_options("-Wno-initializer-overrides")
-
 include(CheckIncludeFiles)
 include(ExternalProject)
 include(external_or_find_package)
@@ -46,7 +44,6 @@ set(SYSLOG_NG_PATH_CONFIG_INCLUDEDIR "\${datadir}/syslog-ng/include")
 set(SYSLOG_NG_PATH_SCLDIR "\${datadir}/syslog-ng/include/scl")
 set(SYSLOG_NG_PATH_LIBEXECDIR "\${exec_prefix}/libexec")
 set(SYSLOG_NG_PATH_DATAROOTDIR "\${prefix}/share")
-set(SYSLOG_NG_ENABLE_LINUX_CAPS 0)
 set(SYSLOG_NG_ENABLE_TCP_WRAPPER 0)
 set(SYSLOG_NG_ENABLE_GPROF 0)
 set(SYSLOG_NG_ENABLE_MEMTRACE 0)
@@ -85,11 +82,8 @@ else()
 endif()
 
 include(CheckCreds)
-if (HAVE_STRUCT_UCRED OR HAVE_STRUCT_CMSGCRED)
-    set(SYSLOG_NG_HAVE_STRUCT_UCRED 1)
-else()
-    set(SYSLOG_NG_HAVE_STRUCT_UCRED 0)
-endif()
+set(SYSLOG_NG_HAVE_STRUCT_UCRED (HAVE_STRUCT_UCRED OR HAVE_STRUCT_CMSGCRED))
+check_struct_member ("struct msghdr" "msg_control" "sys/types.h;sys/socket.h" SYSLOG_NG_HAVE_CTRLBUF_IN_MSGHDR)
 
 include(CheckIPv6)
 
@@ -100,6 +94,7 @@ endif()
 
 check_symbol_exists(strtoll stdlib.h SYSLOG_NG_HAVE_STRTOLL)
 check_symbol_exists(strnlen string.h SYSLOG_NG_HAVE_STRNLEN)
+check_symbol_exists(strtok_r string.h SYSLOG_NG_HAVE_STRTOK_R)
 check_symbol_exists(strtoimax inttypes.h SYSLOG_NG_HAVE_STRTOIMAX)
 check_symbol_exists(inet_aton "sys/socket.h;netinet/in.h;arpa/inet.h" SYSLOG_NG_HAVE_INET_ATON)
 check_symbol_exists(getutent utmp.h SYSLOG_NG_HAVE_GETUTENT)
@@ -125,7 +120,7 @@ set(WITH_GETTEXT "" CACHE STRING "Set the prefix where gettext is installed (e.g
 set(CMAKE_C_STANDARD 99)
 
 find_package(BISON 2.4 REQUIRED)
-find_package(GLIB 2.10.1 REQUIRED)
+find_package(GLIB COMPONENTS gmodule gthread 2.26.1 REQUIRED)
 
 set (SYSLOG_NG_USE_CONST_IVYKIS_MOCK 1)
 external_or_find_package(IVYKIS REQUIRED)
@@ -140,9 +135,20 @@ find_package(Resolv REQUIRED)
 find_package(Wrap)
 find_package(criterion)
 find_package(Inotify)
+find_package(LIBCAP)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 set(SYSLOG_NG_HAVE_INOTIFY "${Inotify_FOUND}")
+
+set (PYTHON_VERSION "AUTO" CACHE STRING "Version of the installed development library" )
+
+if ("${PYTHON_VERSION}" STREQUAL "AUTO")
+  find_package(PythonInterp)
+  find_package(PythonLibs)
+else ()
+  find_package(PythonInterp EXACT "${PYTHON_VERSION}" REQUIRED)
+  find_package(PythonLibs EXACT "${PYTHON_VERSION}" REQUIRED)
+endif ()
 
 include(openssl_functions)
 openssl_set_defines()
@@ -156,6 +162,8 @@ endif()
 if (LIBNET_FOUND)
   set(SYSLOG_NG_ENABLE_SPOOF_SOURCE 1)
 endif()
+
+set(SYSLOG_NG_ENABLE_LINUX_CAPS ${LIBCAP_FOUND})
 
 if (WITH_GETTEXT)
     set(CMAKE_PREFIX_PATH ${WITH_GETTEXT})
@@ -196,6 +204,37 @@ if (CRITERION_FOUND)
     "G_DEBUG=fatal-warnings,fatal-criticals,gc-friendly")
   include(CTest)
 endif()
+
+set(IMPORTANT_WARNINGS
+  -Wshadow
+  -fcommon)
+
+set(ACCEPTABLE_WARNINGS
+  -Wno-stack-protector
+  -Wno-unused-parameter
+  -Wno-variadic-macros)
+
+option(ENABLE_EXTRA_WARNINGS "Enable extra warnings" ON)
+if (ENABLE_EXTRA_WARNINGS)
+  set(EXTRA_WARNINGS
+    -Wimplicit-function-declaration
+    -Wnested-externs
+    -Wold-style-declaration
+    -Wstrict-prototypes
+    -Wswitch-default
+    -Wall
+    -Wmissing-parameter-type
+    -Wuninitialized
+    -Wunused-but-set-parameter
+    -Wcast-align
+    -Wdeprecated
+    -Wdeprecated-declarations
+    -Woverflow
+    -Wdouble-promotion
+    -Wfloat-equal)
+endif()
+
+add_compile_options(${IMPORTANT_WARNINGS} ${ACCEPTABLE_WARNINGS} ${EXTRA_WARNINGS})
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/syslog-ng-config.h.in ${CMAKE_CURRENT_BINARY_DIR}/syslog-ng-config.h)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})

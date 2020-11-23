@@ -26,6 +26,7 @@
 
 #include "syslog-ng.h"
 #include "messages.h"
+#include "atomic.h"
 #include <openssl/ssl.h>
 
 typedef enum
@@ -68,13 +69,19 @@ typedef struct _TLSContext TLSContext;
 #define X509_MAX_O_LEN 64
 #define X509_MAX_OU_LEN 32
 
+typedef struct _TLSVerifier
+{
+  GAtomicCounter ref_cnt;
+  TLSSessionVerifyFunc verify_func;
+  gpointer verify_data;
+  GDestroyNotify verify_data_destroy;
+} TLSVerifier;
+
 typedef struct _TLSSession
 {
   SSL *ssl;
   TLSContext *ctx;
-  TLSSessionVerifyFunc verify_func;
-  gpointer verify_data;
-  GDestroyNotify verify_data_destroy;
+  TLSVerifier *verifier;
   struct
   {
     int found;
@@ -84,8 +91,7 @@ typedef struct _TLSSession
   } peer_info;
 } TLSSession;
 
-void tls_session_set_verify(TLSSession *self, TLSSessionVerifyFunc verify_func, gpointer verify_data,
-                            GDestroyNotify verify_destroy);
+void tls_session_set_verifier(TLSSession *self, TLSVerifier *verifier);
 void tls_session_free(TLSSession *self);
 
 TLSContextSetupResult tls_context_setup_context(TLSContext *self);
@@ -94,7 +100,13 @@ void tls_session_set_trusted_fingerprints(TLSContext *self, GList *fingerprints)
 void tls_session_set_trusted_dn(TLSContext *self, GList *dns);
 
 TLSContext *tls_context_new(TLSMode mode, const gchar *config_location);
-void tls_context_free(TLSContext *s);
+TLSContext *tls_context_ref(TLSContext *self);
+void tls_context_unref(TLSContext *self);
+TLSVerifier *tls_verifier_new(TLSSessionVerifyFunc verify_func, gpointer verify_data,
+                              GDestroyNotify verify_data_destroy);
+TLSVerifier *tls_verifier_ref(TLSVerifier *self);
+void tls_verifier_unref(TLSVerifier *self);
+
 
 gboolean tls_context_set_verify_mode_by_name(TLSContext *self, const gchar *mode_str);
 gboolean tls_context_set_ssl_options_by_name(TLSContext *self, GList *options);

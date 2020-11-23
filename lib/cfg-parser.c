@@ -310,7 +310,7 @@ exit:
 }
 
 void
-report_syntax_error(CfgLexer *lexer, YYLTYPE *yylloc, const char *what, const char *msg)
+report_syntax_error(CfgLexer *lexer, YYLTYPE *yylloc, const char *what, const char *msg, gboolean in_main_grammar)
 {
   CfgIncludeLevel *level = yylloc->level, *from;
 
@@ -338,8 +338,9 @@ report_syntax_error(CfgLexer *lexer, YYLTYPE *yylloc, const char *what, const ch
       fprintf(stderr, "\n");
     }
 
-  fprintf(stderr, "\nsyslog-ng documentation: https://www.balabit.com/support/documentation?product=%s\n"
-          "contact: %s\n", PRODUCT_NAME, PRODUCT_CONTACT);
+  if (in_main_grammar)
+    fprintf(stderr, "\nsyslog-ng documentation: https://www.balabit.com/support/documentation?product=%s\n"
+            "contact: %s\n", PRODUCT_NAME, PRODUCT_CONTACT);
 
 }
 
@@ -350,6 +351,7 @@ extern int cfg_parser_debug;
 gboolean
 cfg_parser_parse(CfgParser *self, CfgLexer *lexer, gpointer *instance, gpointer arg)
 {
+  enum { OK, ERROR, MEMORY_EXHAUSTED } parse_result;
   gboolean success;
 
   if (cfg_parser_debug)
@@ -359,11 +361,17 @@ cfg_parser_parse(CfgParser *self, CfgLexer *lexer, gpointer *instance, gpointer 
   if (self->debug_flag)
     (*self->debug_flag) = cfg_parser_debug;
   cfg_lexer_push_context(lexer, self->context, self->keywords, self->name);
-  success = (self->parse(lexer, instance, arg) == 0);
+  parse_result = self->parse(lexer, instance, arg);
+  success = (parse_result == OK);
   cfg_lexer_pop_context(lexer);
   if (cfg_parser_debug)
     {
-      fprintf(stderr, "\nStopping parser %s, result: %d\n", self->name, success);
+      fprintf(stderr, "\nStopping parser %s, result: %d\n", self->name, parse_result);
+    }
+  if (parse_result == MEMORY_EXHAUSTED)
+    {
+      fprintf(stderr,
+              "\nToo many tokens found during parsing, consider increasing YYMAXDEPTH in lib/cfg-grammar.y and recompiling.\n");
     }
   return success;
 }

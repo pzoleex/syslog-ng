@@ -53,6 +53,7 @@ set (LIB_HEADERS
     alarms.h
     apphook.h
     atomic.h
+    atomic-gssize.h
     block-ref-parser.h
     cache.h
     cfg.h
@@ -86,6 +87,7 @@ set (LIB_HEADERS
     logthrdestdrv.h
     logwriter.h
     mainloop.h
+    signal-handler.h
     mainloop-call.h
     mainloop-worker.h
     mainloop-io-worker.h
@@ -131,6 +133,7 @@ set (LIB_HEADERS
     ack_tracker.h
     host-id.h
     resolved-configurable-paths.h
+    window-size-counter.h
     ${PROJECT_BINARY_DIR}/lib/cfg-grammar.h
     ${PROJECT_BINARY_DIR}/lib/block-ref-grammar.h
     ${PROJECT_BINARY_DIR}/lib/cfg-lex.h
@@ -174,6 +177,7 @@ set(LIB_SOURCES
     logthrdestdrv.c
     logwriter.c
     mainloop.c
+    signal-handler.c
     mainloop-call.c
     mainloop-worker.c
     mainloop-io-worker.c
@@ -212,6 +216,7 @@ set(LIB_SOURCES
     utf8utils.c
     host-id.c
     resolved-configurable-paths.c
+    window-size-counter.c
     ${COMPAT_SOURCES}
     ${CONTROL_SOURCES}
     ${DEBUGGER_SOURCES}
@@ -275,6 +280,7 @@ set(CORE_INCLUDE_DIRS
     ${Gettext_INCLUDE_DIR}
     ${IVYKIS_INCLUDE_DIR}
     ${LIBPCRE_INCLUDE_DIRS}
+    ${LIBCAP_INCLUDE_DIR}
 )
 
 add_library(syslog-ng SHARED ${LIB_SOURCES})
@@ -297,6 +303,7 @@ target_link_libraries(
     ${IVYKIS_LIBRARY}
     ${RESOLV_LIBRARIES}
     ${LIBPCRE_LIBRARIES}
+    ${LIBCAP_LIBRARY}
     OpenSSL::SSL
     OpenSSL::Crypto
     Threads::Threads

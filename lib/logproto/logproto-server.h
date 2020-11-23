@@ -33,6 +33,13 @@
 typedef struct _LogProtoServer LogProtoServer;
 typedef struct _LogProtoServerOptions LogProtoServerOptions;
 
+typedef enum
+{
+  LPPA_POLL_IO,
+  LPPA_FORCE_SCHEDULE_FETCH,
+  LPPA_SUSPEND
+} LogProtoPrepareAction;
+
 #define LOG_PROTO_SERVER_OPTIONS_SIZE 128
 
 struct _LogProtoServerOptions
@@ -59,14 +66,24 @@ void log_proto_server_options_defaults(LogProtoServerOptions *options);
 void log_proto_server_options_init(LogProtoServerOptions *options, GlobalConfig *cfg);
 void log_proto_server_options_destroy(LogProtoServerOptions *options);
 
+
+typedef void (*LogProtoServerWakeupFunc)(gpointer user_data);
+typedef struct _LogProtoServerWakeupCallback
+{
+  LogProtoServerWakeupFunc func;
+  gpointer user_data;
+} LogProtoServerWakeupCallback;
+
 struct _LogProtoServer
 {
   LogProtoStatus status;
   const LogProtoServerOptions *options;
   LogTransport *transport;
+  AckTracker *ack_tracker;
+  LogProtoServerWakeupCallback wakeup_callback;
   /* FIXME: rename to something else */
   gboolean (*is_position_tracked)(LogProtoServer *s);
-  gboolean (*prepare)(LogProtoServer *s, GIOCondition *cond);
+  LogProtoPrepareAction (*prepare)(LogProtoServer *s, GIOCondition *cond, gint *timeout);
   gboolean (*restart_with_state)(LogProtoServer *s, PersistState *state, const gchar *persist_name);
   LogProtoStatus (*fetch)(LogProtoServer *s, const guchar **msg, gsize *msg_len, gboolean *may_read,
                           LogTransportAuxData *aux, Bookmark *bookmark);
@@ -109,9 +126,9 @@ log_proto_server_set_options(LogProtoServer *self, const LogProtoServerOptions *
 }
 
 static inline gboolean
-log_proto_server_prepare(LogProtoServer *s, GIOCondition *cond)
+log_proto_server_prepare(LogProtoServer *s, GIOCondition *cond, gint *timeout)
 {
-  return s->prepare(s, cond);
+  return s->prepare(s, cond, timeout);
 }
 
 static inline gboolean
@@ -155,10 +172,30 @@ log_proto_server_is_position_tracked(LogProtoServer *s)
   return FALSE;
 }
 
+static inline void
+log_proto_server_set_wakeup_cb(LogProtoServer *s, LogProtoServerWakeupFunc wakeup, gpointer user_data)
+{
+  s->wakeup_callback.user_data = user_data;
+  s->wakeup_callback.func = wakeup;
+}
+
+static inline void
+log_proto_server_wakeup_cb_call(LogProtoServerWakeupCallback *wakeup_callback)
+{
+  if (wakeup_callback->func)
+    wakeup_callback->func(wakeup_callback->user_data);
+}
+
 gboolean log_proto_server_validate_options_method(LogProtoServer *s);
 void log_proto_server_init(LogProtoServer *s, LogTransport *transport, const LogProtoServerOptions *options);
 void log_proto_server_free_method(LogProtoServer *s);
 void log_proto_server_free(LogProtoServer *s);
+
+static inline void
+log_proto_server_set_ack_tracker(LogProtoServer *s, AckTracker *ack_tracker)
+{
+  s->ack_tracker = ack_tracker;
+}
 
 #define DEFINE_LOG_PROTO_SERVER(prefix) \
   static gpointer                                                       \
@@ -189,6 +226,8 @@ typedef struct _LogProtoServerFactory LogProtoServerFactory;
 struct _LogProtoServerFactory
 {
   LogProtoServer *(*construct)(LogTransport *transport, const LogProtoServerOptions *options);
+  gint default_inet_port;
+  gboolean use_multitransport;
 };
 
 static inline LogProtoServer *

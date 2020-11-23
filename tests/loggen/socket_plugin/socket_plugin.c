@@ -21,11 +21,15 @@
  *
  */
 
+#include "compat/glib.h"
 #include "loggen_plugin.h"
 #include "loggen_helper.h"
 
+#include <time.h>
 #include <signal.h>
+#include <stddef.h>
 #include <stdio.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <string.h>
@@ -103,6 +107,9 @@ set_generate_message(generate_message_func gen_message)
 static gint
 get_thread_count(void)
 {
+  if (!thread_lock)
+    return 0;
+
   int num;
   g_mutex_lock(thread_lock);
   num = active_thread_count + idle_thread_count;

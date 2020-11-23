@@ -33,6 +33,7 @@
 #include "apphook.h"
 #include "timeutils.h"
 #include "mainloop-worker.h"
+#include "str-utils.h"
 
 #include <string.h>
 #include <errno.h>
@@ -178,6 +179,14 @@ afsql_dd_set_retries(LogDriver *s, gint num_retries)
 {
   AFSqlDestDriver *self = (AFSqlDestDriver *) s;
   self->num_retries = num_retries;
+}
+
+void
+afsql_dd_set_ignore_tns_config(LogDriver *s, const gboolean ignore_tns_config)
+{
+  AFSqlDestDriver *self = (AFSqlDestDriver *) s;
+
+  self->ignore_tns_config = ignore_tns_config;
 }
 
 void
@@ -722,6 +731,9 @@ afsql_dd_ensure_initialized_connection(AFSqlDestDriver *self)
   dbi_conn_set_option(self->dbi_ctx, "sqlite_dbdir", "");
   dbi_conn_set_option(self->dbi_ctx, "sqlite3_dbdir", "");
 
+  if (strcmp(self->type, s_oracle) == 0)
+    dbi_conn_set_option_numeric(self->dbi_ctx, "oracle_ignore_tns_config", self->ignore_tns_config);
+
   /* Set user-specified options */
   g_hash_table_foreach(self->dbd_options, afsql_dd_set_dbd_opt, self->dbi_ctx);
   g_hash_table_foreach(self->dbd_options_numeric, afsql_dd_set_dbd_opt_numeric, self->dbi_ctx);
@@ -1133,7 +1145,7 @@ afsql_dd_start_thread(AFSqlDestDriver *self)
 }
 
 
-static gchar *
+static const gchar *
 afsql_dd_format_stats_instance(AFSqlDestDriver *self)
 {
   static gchar persist_name[64];
@@ -1186,6 +1198,12 @@ afsql_dd_init(LogPipe *s)
       msg_error("Default columns and values must be specified for database destinations",
                 evt_tag_str("type", self->type));
       return FALSE;
+    }
+
+  if (self->ignore_tns_config && strcmp(self->type, s_oracle) != 0)
+    {
+      msg_warning("WARNING: Option ignore_tns_config was skipped because database type is not Oracle",
+                  evt_tag_str("type", self->type));
     }
 
   stats_lock();
@@ -1433,6 +1451,7 @@ afsql_dd_new(GlobalConfig *cfg)
   self->database = g_strdup("logs");
   self->encoding = g_strdup("UTF-8");
   self->transaction_active = FALSE;
+  self->ignore_tns_config = FALSE;
 
   self->table = log_template_new(configuration, NULL);
   log_template_compile(self->table, "messages", NULL);
@@ -1460,9 +1479,9 @@ afsql_dd_new(GlobalConfig *cfg)
 gint
 afsql_dd_lookup_flag(const gchar *flag)
 {
-  if (strcmp(flag, "explicit-commits") == 0 || strcmp(flag, "explicit_commits") == 0)
+  if (strcmp(flag, "explicit-commits") == 0)
     return AFSQL_DDF_EXPLICIT_COMMITS;
-  else if (strcmp(flag, "dont-create-tables") == 0 || strcmp(flag, "dont_create_tables") == 0)
+  else if (strcmp(flag, "dont-create-tables") == 0)
     return AFSQL_DDF_DONT_CREATE_TABLES;
   else
     msg_warning("Unknown SQL flag",

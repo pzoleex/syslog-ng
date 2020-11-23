@@ -20,6 +20,7 @@ EXTRA_DIST += \
 	contrib/syslog-ng.conf.SunOS \
 	\
 	contrib/syslog2ng \
+	contrib/syslog-mc \
 	contrib/syslog-ng.vim \
 	\
 	contrib/syslog-ng.conf.doc \
@@ -47,19 +48,23 @@ EXTRA_DIST += \
 	\
 	contrib/cygwin-packaging/cygwin-postinstall \
 	contrib/cygwin-packaging/syslog-ng-config \
+	contrib/cygwin-packaging/syslog-ng.sh \
 	\
 	contrib/solaris-packaging/solaris10_install.txt \
 	contrib/solaris-packaging/syslog-ng.example.xml \
+	contrib/solaris-packaging/syslog-ng@default \
 	contrib/solaris-packaging/syslog-ng-sol11-smf.example.xml \
 	contrib/solaris-packaging/syslog-ng.method \
 	\
 	contrib/freebsd-packaging/syslog-ng.rc.d \
 	contrib/freebsd-packaging/syslog-ng.conf.example \
+	contrib/openbsd-packaging/syslog-ng.conf \
 	\
 	contrib/selinux/README \
 	contrib/selinux/labels.txt \
 	contrib/selinux/syslog_ng.sh \
 	contrib/selinux/src/syslog_ng.el67.te.in \
+	contrib/selinux/src/syslog_ng.module.version \
 	contrib/selinux/src/root_unsafe/syslog_ng.el7.fc.in \
 	contrib/selinux/src/root_unsafe/syslog_ng.el6.fc.in \
 	contrib/selinux/src/root_unsafe/syslog_ng.el5.fc.in \

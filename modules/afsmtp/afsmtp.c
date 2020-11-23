@@ -48,7 +48,7 @@ typedef struct
 
 typedef struct
 {
-  LogThrDestDriver super;
+  LogThreadedDestDriver super;
 
   /* Shared between main/writer; only read by the writer, never
      written */
@@ -198,8 +198,8 @@ ignore_sigpipe (void)
   sigaction(SIGPIPE, &sa, NULL);
 }
 
-static gchar *
-afsmtp_dd_format_stats_instance(LogThrDestDriver *d)
+static const gchar *
+afsmtp_dd_format_stats_instance(LogThreadedDestDriver *d)
 {
   AFSMTPDriver *self = (AFSMTPDriver *)d;
   static gchar persist_name[1024];
@@ -483,7 +483,7 @@ __send_message(AFSMTPDriver *self, smtp_session_t session)
 }
 
 static worker_insert_result_t
-afsmtp_worker_insert(LogThrDestDriver *s, LogMessage *msg)
+afsmtp_worker_insert(LogThreadedDestDriver *s, LogMessage *msg)
 {
   AFSMTPDriver *self = (AFSMTPDriver *)s;
   gboolean success = TRUE;
@@ -518,7 +518,7 @@ afsmtp_worker_insert(LogThrDestDriver *s, LogMessage *msg)
 }
 
 static void
-afsmtp_worker_thread_init(LogThrDestDriver *d)
+afsmtp_worker_thread_init(LogThreadedDestDriver *d)
 {
   AFSMTPDriver *self = (AFSMTPDriver *)d;
 
@@ -528,7 +528,7 @@ afsmtp_worker_thread_init(LogThrDestDriver *d)
 }
 
 static void
-afsmtp_worker_thread_deinit(LogThrDestDriver *d)
+afsmtp_worker_thread_deinit(LogThreadedDestDriver *d)
 {
   AFSMTPDriver *self = (AFSMTPDriver *)d;
 
@@ -614,7 +614,7 @@ afsmtp_dd_init(LogPipe *s)
     return FALSE;
 
   log_template_options_init(&self->template_options, cfg);
-  return log_threaded_dest_driver_start(s);
+  return log_threaded_dest_driver_init_method(s);
 }
 
 static void
@@ -672,7 +672,7 @@ afsmtp_dd_new(GlobalConfig *cfg)
   self->super.worker.thread_deinit = afsmtp_worker_thread_deinit;
   self->super.worker.insert = afsmtp_worker_insert;
 
-  self->super.format.stats_instance = afsmtp_dd_format_stats_instance;
+  self->super.format_stats_instance = afsmtp_dd_format_stats_instance;
   self->super.stats_source = SCS_SMTP;
 
   afsmtp_dd_set_host((LogDriver *)self, "127.0.0.1");

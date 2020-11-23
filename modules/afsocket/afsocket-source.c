@@ -442,6 +442,8 @@ afsocket_sd_close_connection(AFSocketSourceDriver *self, AFSocketSourceConnectio
                 evt_tag_int("fd", sc->sock),
                 evt_tag_str("client", g_sockaddr_format(sc->peer_addr, buf1, sizeof(buf1), GSA_FULL)),
                 evt_tag_str("local", g_sockaddr_format(self->bind_addr, buf2, sizeof(buf2), GSA_FULL)));
+
+  log_reader_close_proto(sc->reader);
   log_pipe_deinit(&sc->super);
   self->connections = g_list_remove(self->connections, sc);
   afsocket_sd_kill_connection(sc);
@@ -510,6 +512,8 @@ afsocket_sd_setup_transport(AFSocketSourceDriver *self)
                 evt_tag_str("transport", self->transport_mapper->logproto));
       return FALSE;
     }
+
+  self->transport_mapper->create_multitransport = self->proto_factory->use_multitransport;
 
   afsocket_sd_setup_reader_options(self);
   return TRUE;

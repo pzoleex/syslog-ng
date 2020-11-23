@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2017 Balabit
+ * Copyright (c) 2002-2018 Balabit
+ * Copyright (c) 2018 Laszlo Budai <laszlo.budai@balabit.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,32 +22,35 @@
  *
  */
 
-#ifndef GETENT_BB_H_INCLUDED
-#define GETENT_BB_H_INCLUDED
+#include "transport/transport-factory-socket.h"
+#include "transport/transport-socket.h"
 
-#if defined(sun) || defined(__sun)
+DEFINE_TRANSPORT_FACTORY_ID_FUN("socket", transport_factory_socket_id);
 
-#include <sys/types.h>
-#include <grp.h>
-#include <pwd.h>
-#include <netdb.h>
+static LogTransport *
+_construct_transport_dgram(const TransportFactory *s, gint fd)
+{
+  return log_transport_dgram_socket_new(fd);
+}
 
-int bb__getprotobynumber_r(int proto,
-                           struct protoent *result_buf, char *buf,
-                           size_t buflen, struct protoent **result);
+static LogTransport *
+_construct_transport_stream(const TransportFactory *s, gint fd)
+{
+  return log_transport_stream_socket_new(fd);
+}
 
-int bb__getprotobyname_r(const char *name,
-                         struct protoent *result_buf, char *buf,
-                         size_t buflen, struct protoent **result);
+TransportFactory *
+transport_factory_socket_new(int sock_type)
+{
+  TransportFactorySocket *self = g_new0(TransportFactorySocket, 1);
 
-int bb__getservbyport_r(int port, const char *proto,
-                        struct servent *result_buf, char *buf,
-                        size_t buflen, struct servent **result);
+  if (sock_type == SOCK_DGRAM)
+    self->super.construct_transport = _construct_transport_dgram;
+  else
+    self->super.construct_transport = _construct_transport_stream;
 
-int bb__getservbyname_r(const char *name, const char *proto,
-                        struct servent *result_buf, char *buf,
-                        size_t buflen, struct servent **result);
+  self->super.id = transport_factory_socket_id();
 
-#endif
+  return &self->super;
+}
 
-#endif

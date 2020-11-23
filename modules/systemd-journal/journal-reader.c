@@ -224,21 +224,17 @@ static void
 _set_program(JournalReaderOptions *options, LogMessage *msg)
 {
   gssize value_length = 0;
-  /* g_strdup: referred value can change during log_msg_set_value if nvtable realloc needed */
-  gchar *value = g_strdup(_get_value_from_message(options, msg, "SYSLOG_IDENTIFIER", &value_length));
+  const gchar *value_ref = _get_value_from_message(options, msg, "SYSLOG_IDENTIFIER", &value_length);
 
-  if (value_length > 0)
+  if (value_length <= 0)
     {
-      log_msg_set_value(msg, LM_V_PROGRAM, value, value_length);
-    }
-  else
-    {
-      value = g_strdup(_get_value_from_message(options, msg, "_COMM", &value_length));
-      log_msg_set_value(msg, LM_V_PROGRAM, value, value_length);
+      value_ref = _get_value_from_message(options, msg, "_COMM", &value_length);
     }
 
+  /* we need to strdup the value_ref: referred value can change during log_msg_set_value if nvtable realloc needed */
+  gchar *value = g_strdup(value_ref);
+  log_msg_set_value(msg, LM_V_PROGRAM, value, value_length);
   g_free(value);
-
 }
 
 static void
@@ -350,25 +346,72 @@ _skip_old_records(JournalReader *self)
   return TRUE;
 }
 
+static gboolean
+_journal_seek(Journald *journal, const gchar *cursor)
+{
+  gint rc = journald_seek_cursor(journal, cursor);
+
+  if (rc != 0)
+    {
+      msg_warning("Failed to seek journal to the saved cursor position",
+                  evt_tag_str("cursor", cursor),
+                  evt_tag_errno("error", -rc));
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
+static gboolean
+_journal_next(Journald *journal)
+{
+  gint rc = journald_next(journal);
+
+  if (rc != 1)
+    {
+      msg_warning("Failed to step cursor",
+                  evt_tag_errno("error", -rc));
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
+static gboolean
+_journal_test_cursor(Journald *journal, const gchar *cursor)
+{
+  gint rc = journald_test_cursor(journal, cursor);
+
+  if (rc <= 0)
+    {
+      msg_warning("Current position not matches to the saved cursor position, seek to head",
+                  evt_tag_str("cursor", cursor),
+                  evt_tag_errno("error", -rc));
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
 static inline gboolean
 _seek_to_saved_state(JournalReader *self)
 {
   JournalReaderState *state = persist_state_map_entry(self->persist_state, self->persist_handle);
-  gint rc = journald_seek_cursor(self->journal, state->cursor);
-  persist_state_unmap_entry(self->persist_state, self->persist_handle);
-  if (rc != 0)
+
+  if (!_journal_seek(self->journal, state->cursor) ||
+      !_journal_next(self->journal) ||
+      !_journal_test_cursor(self->journal, state->cursor))
     {
-      msg_warning("Failed to seek journal to the saved cursor position",
-                  evt_tag_str("cursor", state->cursor),
-                  evt_tag_errno("error", -rc));
+      persist_state_unmap_entry(self->persist_state, self->persist_handle);
+
       return _seek_to_head(self);
     }
-  else
-    {
-      msg_debug("Seeking the journal to the last cursor position",
-                evt_tag_str("cursor", state->cursor));
-    }
-  journald_next(self->journal);
+
+  msg_debug("Seeking the journal to the last cursor position",
+            evt_tag_str("cursor", state->cursor));
+
+  persist_state_unmap_entry(self->persist_state, self->persist_handle);
+
   return TRUE;
 }
 

@@ -53,12 +53,92 @@ cfg_block_format_name(CfgBlockGenerator *s, gchar *buf, gsize buf_len)
 {
   CfgBlock *self = (CfgBlock *) s;
 
-  g_snprintf(buf, buf_len, "block %s %s (at %s:%d:%d)",
+  g_snprintf(buf, buf_len, "block %s %s() at %s:%d",
              cfg_lexer_lookup_context_name_by_type(self->super.context),
              self->super.name,
              self->filename ? : "#buffer",
-             self->line, self->column);
+             self->line);
   return buf;
+}
+
+/* token block args */
+
+static void
+_validate_args_callback(gpointer k, gpointer v, gpointer user_data)
+{
+  CfgArgs *defs = ((gpointer *) user_data)[0];
+  const gchar *reference = ((gpointer *) user_data)[1];
+  gboolean *problem_found = ((gpointer *) user_data)[2];
+
+  if ((!defs || !cfg_args_contains(defs, k)))
+    {
+      if (cfg_args_is_accepting_varargs(defs))
+        {
+          msg_verbose("Unknown argument, adding it to __VARARGS__",
+                      evt_tag_str("argument", k),
+                      evt_tag_str("value", v),
+                      evt_tag_str("reference", reference));
+        }
+      else
+        {
+          msg_error("Unknown argument specified to block reference",
+                    evt_tag_str("argument", k),
+                    evt_tag_str("value", v),
+                    evt_tag_str("reference", reference));
+          *problem_found = TRUE;
+        }
+    }
+}
+
+static void
+_validate_mandatory_options_callback(gpointer parameter, gpointer default_value, gpointer user_data)
+{
+  CfgArgs *user_args = ((gpointer *) user_data)[0];
+  const gchar *reference = ((gpointer *) user_data)[1];
+  gboolean *missing_parameter_found = ((gpointer *) user_data)[2];
+
+  const gchar *value = cfg_args_get(user_args, parameter);
+
+  if (default_value == NULL && value == NULL)
+    {
+      *missing_parameter_found = TRUE;
+      msg_error("Mandatory parameter not overridden",
+                evt_tag_str("parameter", parameter),
+                evt_tag_str("reference", reference));
+    }
+}
+
+static gboolean
+_validate_mandatory_options(CfgArgs *arg_defs, CfgArgs *args, const gchar *reference)
+{
+  gboolean missing_parameter_found = FALSE;
+  gpointer validate_params[] = { args, (gchar *)reference, &missing_parameter_found };
+  cfg_args_foreach(arg_defs, _validate_mandatory_options_callback, validate_params);
+
+  if (missing_parameter_found)
+    return FALSE;
+
+  return TRUE;
+};
+
+gboolean
+_validate_spurious_args(CfgArgs *self, CfgArgs *defs, const gchar *reference)
+{
+  gboolean problem_found = FALSE;
+  gpointer validate_params[] = { defs, (gchar *) reference, &problem_found };
+
+  cfg_args_foreach(self, _validate_args_callback, validate_params);
+
+  if (problem_found)
+    return FALSE;
+
+  return TRUE;
+}
+
+static gboolean
+_validate_args(CfgArgs *self, CfgArgs *defs, const gchar *reference)
+{
+  return _validate_mandatory_options(defs, self, reference) && _validate_spurious_args(self, defs, reference);
 }
 
 /*
@@ -69,28 +149,35 @@ cfg_block_format_name(CfgBlockGenerator *s, gchar *buf, gsize buf_len)
  * for the lexer.
  */
 gboolean
-cfg_block_generate(CfgBlockGenerator *s, GlobalConfig *cfg, CfgArgs *args, GString *result)
+cfg_block_generate(CfgBlockGenerator *s, GlobalConfig *cfg, CfgArgs *args, GString *result, const gchar *reference)
 {
   CfgBlock *self = (CfgBlock *) s;
   gchar *value;
   gsize length;
   GError *error = NULL;
+  gchar buf[256];
 
-  cfg_args_set(args, "__VARARGS__", cfg_args_format_varargs(args, self->arg_defs));
+  if (!_validate_args(args, self->arg_defs, reference))
+    return FALSE;
+
+  if (cfg_args_is_accepting_varargs(self->arg_defs))
+    {
+      gchar *formatted_varargs = cfg_args_format_varargs(args, self->arg_defs);
+      cfg_args_set(args, "__VARARGS__", formatted_varargs);
+      g_free(formatted_varargs);
+    }
 
   value = cfg_lexer_subst_args_in_input(cfg->globals, self->arg_defs, args, self->content, -1, &length, &error);
   if (!value)
     {
       msg_warning("Syntax error while resolving backtick references in block",
-                  evt_tag_str("context", cfg_lexer_lookup_context_name_by_type(self->super.context)),
-                  evt_tag_str("block", self->super.name),
-                  evt_tag_str("error", error->message),
-                  NULL);
+                  evt_tag_str("block_definition", cfg_block_generator_format_name(s, buf, sizeof(buf))),
+                  evt_tag_str("error", error->message));
       g_clear_error(&error);
       return FALSE;
     }
 
-  g_string_assign_len(result, value, length);
+  g_string_append_len(result, value, length);
   g_free(value);
   return TRUE;
 }

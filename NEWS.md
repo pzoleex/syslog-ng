@@ -1,68 +1,89 @@
-3.15.1
-
-<!-- Thu, 19 Apr 2018 10:55:16 +0200 -->
-
-## Features
-
- * Support added for `if`/`elif`/`else` blocks to the configuration file syntax.
-   (#1856)
- * Dramatically improved debug messages during filter/parser evaluation. (#1898)
- * Similarly improved the error messages shown on syntax errors, they now show a
-   full backtrace of inclusions, among other things. (#1932)
- * The `hook-commands` module was added, allowing one to run custom commands on
-   source or destination setup and teardown. (#1951)
- * Implemented a way to skip processing included config file snippets in case a
-   dependency is missing: The `@requires json` pragma. (#827, #1956)
- * Basic client-side failover support was implemented. (#1905)
- * Errors from python destinations are now reported together with any exception
-   text (if any). (#1931)
- * `add-contextual-data` gained a new `ignore-case()` option. (#1911)
+3.17.2
+======
 
 ## Bugfixes
 
- * Fix a crash that happened on disk queue restart. (#1886)
- * Fixed another crash when a corrupted disk queue file was being moved away.
-   (#1924)
- * Fixed a crash that could happen during nvtable deserialization. (#1967)
- * Fixed a crash that occurred when NVTables were stored on low memory
-   addresses. (#1970)
- * Fixed an issue with TLS session resumption, the session id context value is
-   now properly set. (#1936, #2000)
- * We now link directly to the `evtlog` shipped with syslog-ng, and are not
-   using the system library, not even when present. (#1915)
- * TLS destinations now work again without `key-file` or `cert-file` specified.
-   (#1916, #1917)
- * SDATA block names are now sanitized, in order to not break the spec when we
-   get our SDATA from sources that are more lax (such as JSON). (#1948)
- * Some internal messages contained key-value pairs where the key had spaces in
-   it, this has been addressed, they do not contain spaces anymore.
- * The STOMP destination will now correctly use template options when formatting
-   its body part. (#1957)
- * Fix compilation with OpenSSL 1.1.0 (#1921, #1997)
- * Fix compilation on FreeBSD. (#1901)
- * Fix compilation on SLES 11. (#1897)
- * Fix compilation on Hurd. (#1912, #1914)
- * Fix compiltaion on Solaris 10. (#1982, #1983)
- * Fix compilation on MacOS.
- * Fixed a value conflict in the `afstreams` module's grammar file.
- * Various compiler warning-related fixes all over the codebase.
+ * Fix a bug in flow-control (#2224)
+ * Fix template function evaluation in debugger (#2220)
+
+3.17.1
+======
+
+## Features
+
+ * Client side failback mode (#2183)
+ * New linux-audit() source as SCL (#2186)
+ * Decorating generated configuration (#2218)
+ * Introduce ewmm() source (#2199, #2209)
+ * Add parsing of Cisco unified call manager (#2134)
+ * Mandatory parameters for cfg-block (SCL) (#2088)
+
+## Bugfixes
+
+ * dqtool cat print backlog items (#2213)
+ * Rewind backlog in case of stateless LogProtoClient (#2214)
+ * Filter out incorrectly parsed sudo logs (#2208)
+ * Minor fixes related to client-lib-dir, loggen and eventlog (#2204)
+ * Minor stats-query fixes and refactor (#2193)
+ * Reliable disk buffer non-empty backlog (#2192)
+ * Fix pip package versions on older distro releases (dbld) (#2188)
+ * Fix a groupset/groupunset and map-value-pairs() crash (#2184)
+ * Make g_atomic_counter_set() atomic and update minimum glib version to 2.26 (#2182)
+ * Aligning java related SCLs with mandatory parameters (#2160)
+ * Loggen minor fixes (#2150)
+ * grab-logging should be installed as a header (#2151)
+ * Fix possible underflow of memory_usage (afsql, logqueue-fifo) (#2140)
+ * Fix SELinux module version inconsistency (#2133)
+ * Fix CMake unit test compilation (no-pie) (#2137)
+ * Fix possible crash in syslog-parser() (#2128)
+ * Disable ack for mark mode (#2129)
+ * Fixing a Telegram destination bug with bot id (#2142)
+ * All drivers should support inner destination or source plugins (#2143)
+ * Fix default file and directory creation ownership (#2119)
+ * Fix global "center;;received" counter when systemd-journal() is used (#2121)
+ * Link everything to libsecret-storage (#2100)
+ * Inform about the right dns-cache() configuration (warning message typo) (#2145)
+ * Adjusting window size for internal mark mode (#2146)
+ * Fix memory leaks in disk-buffer() (#2153)
+ * Fix undefined behavior in log multiplexer (#2154)
+ * Fix static linking mode (autotools) (#2155)
+ * Fix internal mark mode infinite loop with old ivykis (#2157)
+ * Fix missing normalize flags (#2162)
+ * Keep JVM running on reload if once configured (#2164, #2211)
+ * Fix a race condition (suspend) in LogSource (#2167)
+ * Add `@requires json-plugin` to the cim() parser (#2181)
+ * Added exclude_kmsg option to system source (#2166)
+ * Fix padding template function (#2174)
+ * Leak & invalid memory access (#2173)
+ * FreeBSD 11.2 builderror SOCK_STREAM (#2170)
+ * Add ref-counted TLSVerifier struct (use after free fix) (#2168)
 
 ## Other changes
 
- * POSIX RegExp support was dropped from the filters, PCRE remains available. (#1899)
- * Miscellaneous build-system related fixes and improvements (both autotools and
-   CMake).
- * Update `lib/json-c` to `json-c-0.13-20171207`. (#1900)
+ * Improve loggen's file message parser (#2205)
+ * syslog-ng-debun improvements (#2201)
+ * Goodbye "goto relex" (refactor) (#2198)
+ * Refactor the callback registration mechanism of WildcardFileReader (#2185)
+ * Extended Linux capabilities detection (pkg-config) (#2169)
+ * Add atomic gssize (#2159)
+ * Lower the message level of `@requires` to debug (#2147)
+ * macOS warning elimination (#2139)
+ * Remove a misleading rewrite-related debug message (#2132)
+ * Minor updates to SELinux policy installer script (#2127)
+ * More robust GLib detection (CMake) (#2125)
+ * Logthreaded nonfunctional changes (#2123)
+ * Confgen and pragma improvements (#2122)
+ * Flush before stopping syslog-ng (functional tests) (#2216)
+ * Port unit tests into criterion (test_filters_netmask6, test_findeom, csv_parser, patternDB) (#2217, #2175, #2118)
+ * Libtest refactors (#2149)
+ * Add missing files to the source tarball (#2114)
+ * Better python binary detection (#2092)
 
 ## Notes to the developers
 
- * The `init()` function is now optional for Python destinations. (#1756)
- * The Docker environment (`dbld/`) has seen significant changes, among them an
-   upgrade to Ubuntu Xenial. (#1876)
- * `dbld/rules` gained two new targets: `login` and `build`, that do what their
-   names suggest. (#1927)
- * The `LogPipe` object gained a `pre_init()` and a `post_deinit()` method, used
-   by the `hook-commands` module.
+ * LogThreadedDestDriver batching (#2063)
+ * Add sqlite3 and riemann to dbld devshell (#2210)
+ * Make mock-transport inheritable (#2120)
 
 ## Credits
 
@@ -74,7 +95,9 @@ feedback are all important contributions, so please if you are a user
 of syslog-ng, contribute.
 
 We would like to thank the following people for their contribution:
-Andras Mitzki, Antal Nemes, Balazs Scheidler, Budai Laszlo, Gabor Nagy, Gábor
-Nagy, Gergely Nagy, Juhasz Viktor, Kókai Péter, Laszlo Budai, László Szemere,
-László Várady, Mehul Prajapati, Norbert Takacs, Robert Fekete, SZALAY Attila,
-Tamas Nagy, Terez Nemes, Utsav Krishnan, Videet Singhai, Vivek Raj
+
+Andras Mitzki, Antal Nemes, Balazs Scheidler, Bernie Harris, Bertrand Jacquin,
+Gabor Nagy, Gergely Nagy, German Service Network, Janos SZIGETVARI, Laszlo Budai,
+Laszlo Szemere, László Várady, Norbert Takacs, Peter Czanik, Peter Kokai,
+Szigetvari Janos, Terez Nemes, Viktor Juhasz.
+

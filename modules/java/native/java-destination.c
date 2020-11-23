@@ -140,7 +140,7 @@ java_dd_init(LogPipe *s)
   if (!java_destination_proxy_init(self->proxy))
     return FALSE;
 
-  return log_threaded_dest_driver_start(s);
+  return log_threaded_dest_driver_init_method(s);
 }
 
 gboolean
@@ -158,7 +158,7 @@ java_dd_send_to_object(JavaDestDriver *self, LogMessage *msg)
 }
 
 gboolean
-java_dd_open(LogThrDestDriver *s)
+java_dd_open(LogThreadedDestDriver *s)
 {
   JavaDestDriver *self = (JavaDestDriver *)s;
   if (!java_destination_proxy_is_opened(self->proxy))
@@ -169,7 +169,7 @@ java_dd_open(LogThrDestDriver *s)
 }
 
 void
-java_dd_close(LogThrDestDriver *s)
+java_dd_close(LogThreadedDestDriver *s)
 {
   JavaDestDriver *self = (JavaDestDriver *)s;
   if (java_destination_proxy_is_opened(self->proxy))
@@ -179,7 +179,7 @@ java_dd_close(LogThrDestDriver *s)
 }
 
 static worker_insert_result_t
-java_worker_insert(LogThrDestDriver *s, LogMessage *msg)
+java_worker_insert(LogThreadedDestDriver *s, LogMessage *msg)
 {
   JavaDestDriver *self = (JavaDestDriver *)s;
 
@@ -192,15 +192,20 @@ java_worker_insert(LogThrDestDriver *s, LogMessage *msg)
   return sent ? WORKER_INSERT_RESULT_SUCCESS : WORKER_INSERT_RESULT_ERROR;
 }
 
-static void
-java_worker_message_queue_empty(LogThrDestDriver *d)
+static worker_insert_result_t
+java_worker_flush(LogThreadedDestDriver *d)
 {
   JavaDestDriver *self = (JavaDestDriver *)d;
   java_destination_proxy_on_message_queue_empty(self->proxy);
+
+  /* FIXME: the java API as we published does not yet support returning a
+   * status from this call, so return success */
+
+  return WORKER_INSERT_RESULT_SUCCESS;
 }
 
 static void
-java_worker_thread_deinit(LogThrDestDriver *d)
+java_worker_thread_deinit(LogThreadedDestDriver *d)
 {
   java_dd_close(d);
   java_machine_detach_thread();
@@ -221,8 +226,8 @@ java_dd_format_persist_name(const LogPipe *s)
   return persist_name;
 }
 
-static gchar *
-java_dd_format_stats_instance(LogThrDestDriver *d)
+static const gchar *
+java_dd_format_stats_instance(LogThreadedDestDriver *d)
 {
   JavaDestDriver *self = (JavaDestDriver *)d;
   static gchar persist_name[1024];
@@ -272,12 +277,12 @@ java_dd_new(GlobalConfig *cfg)
   self->super.super.super.super.generate_persist_name = java_dd_format_persist_name;
 
   self->super.worker.thread_deinit = java_worker_thread_deinit;
-  self->super.worker.insert = java_worker_insert;
   self->super.worker.connect = java_dd_open;
   self->super.worker.disconnect = java_dd_close;
-  self->super.worker.worker_message_queue_empty = java_worker_message_queue_empty;
+  self->super.worker.insert = java_worker_insert;
+  self->super.worker.flush = java_worker_flush;
 
-  self->super.format.stats_instance = java_dd_format_stats_instance;
+  self->super.format_stats_instance = java_dd_format_stats_instance;
   self->super.stats_source = SCS_JAVA;
 
   self->template = log_template_new(cfg, NULL);

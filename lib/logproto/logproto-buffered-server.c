@@ -539,8 +539,8 @@ error:
   return FALSE;
 }
 
-gboolean
-log_proto_buffered_server_prepare(LogProtoServer *s, GIOCondition *cond)
+LogProtoPrepareAction
+log_proto_buffered_server_prepare(LogProtoServer *s, GIOCondition *cond, gint *timeout G_GNUC_UNUSED)
 {
   LogProtoBufferedServer *self = (LogProtoBufferedServer *) s;
 
@@ -550,7 +550,7 @@ log_proto_buffered_server_prepare(LogProtoServer *s, GIOCondition *cond)
   if (*cond == 0)
     *cond = G_IO_IN;
 
-  return FALSE;
+  return LPPA_POLL_IO;
 }
 
 static gint

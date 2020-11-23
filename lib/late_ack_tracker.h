@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2002-2012 Balabit
- * Copyright (c) 1998-2012 Balázs Scheidler
+ * Copyright (c) 2002-2018 Balabit
+ * Copyright (c) 2018 Laszlo Budai
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -22,22 +22,28 @@
  *
  */
 
-#include "misc.h"
-#include "dnscache.h"
-#include "messages.h"
-#include "gprocess.h"
+#ifndef LATE_ACK_TRACKER_H_INCLUDED
+#define LATE_ACK_TRACKER_H_INCLUDED
 
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <string.h>
-#include <fcntl.h>
-#include <pwd.h>
-#include <grp.h>
-#include <stdlib.h>
-#include <time.h>
-#include <stdio.h>
-#include <signal.h>
+#include "ack_tracker.h"
+
+typedef struct _AckTrackerOnAllAcked AckTrackerOnAllAcked;
+
+typedef void (*AckTrackerOnAllAckedFunc)(gpointer);
+
+struct _AckTrackerOnAllAcked
+{
+  AckTrackerOnAllAckedFunc func;
+  gpointer user_data;
+  GDestroyNotify user_data_free_fn;
+};
+
+gboolean late_ack_tracker_is_empty(AckTracker *self);
+void late_ack_tracker_lock(AckTracker *self);
+void late_ack_tracker_unlock(AckTracker *self);
+void late_ack_tracker_set_on_all_acked(AckTracker *s, AckTrackerOnAllAckedFunc func, gpointer user_data,
+                                       GDestroyNotify user_data_free_fn);
+
+
+#endif
+

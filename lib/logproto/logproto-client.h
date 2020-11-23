@@ -62,12 +62,13 @@ struct _LogProtoClient
   const LogProtoClientOptions *options;
   LogTransport *transport;
   /* FIXME: rename to something else */
-  gboolean (*prepare)(LogProtoClient *s, gint *fd, GIOCondition *cond);
+  gboolean (*prepare)(LogProtoClient *s, gint *fd, GIOCondition *cond, gint *timeout);
   LogProtoStatus (*post)(LogProtoClient *s, LogMessage *logmsg, guchar *msg, gsize msg_len, gboolean *consumed);
   LogProtoStatus (*flush)(LogProtoClient *s);
   gboolean (*validate_options)(LogProtoClient *s);
   gboolean (*handshake_in_progess)(LogProtoClient *s);
   LogProtoStatus (*handshake)(LogProtoClient *s);
+  gboolean (*restart_with_state)(LogProtoClient *s, PersistState *state, const gchar *persist_name);
   void (*free_fn)(LogProtoClient *s);
   LogProtoClientFlowControlFuncs flow_control_funcs;
 };
@@ -120,9 +121,9 @@ log_proto_client_handshake(LogProtoClient *s)
 }
 
 static inline gboolean
-log_proto_client_prepare(LogProtoClient *s, gint *fd, GIOCondition *cond)
+log_proto_client_prepare(LogProtoClient *s, gint *fd, GIOCondition *cond, gint *timeout)
 {
-  return s->prepare(s, fd, cond);
+  return s->prepare(s, fd, cond, timeout);
 }
 
 static inline LogProtoStatus
@@ -153,6 +154,14 @@ log_proto_client_reset_error(LogProtoClient *s)
   s->status = LPS_SUCCESS;
 }
 
+static inline gboolean
+log_proto_client_restart_with_state(LogProtoClient *s, PersistState *state, const gchar *persist_name)
+{
+  if (s->restart_with_state)
+    return s->restart_with_state(s, state, persist_name);
+  return FALSE;
+}
+
 gboolean log_proto_client_validate_options(LogProtoClient *self);
 void log_proto_client_init(LogProtoClient *s, LogTransport *transport, const LogProtoClientOptions *options);
 void log_proto_client_free(LogProtoClient *s);
@@ -164,6 +173,7 @@ void log_proto_client_free_method(LogProtoClient *s);
   {                                                                     \
     static LogProtoClientFactory proto = {                              \
       .construct = prefix ## _client_new,                               \
+      .stateful  = FALSE,                                               \
     };                                                                  \
     return &proto;                                                      \
   }
@@ -187,6 +197,9 @@ typedef struct _LogProtoClientFactory LogProtoClientFactory;
 struct _LogProtoClientFactory
 {
   LogProtoClient *(*construct)(LogTransport *transport, const LogProtoClientOptions *options);
+  gint default_inet_port;
+  gboolean use_multitransport;
+  gboolean stateful;
 };
 
 static inline LogProtoClient *
@@ -194,6 +207,12 @@ log_proto_client_factory_construct(LogProtoClientFactory *self, LogTransport *tr
                                    const LogProtoClientOptions *options)
 {
   return self->construct(transport, options);
+}
+
+static inline gboolean
+log_proto_client_factory_is_proto_stateful(LogProtoClientFactory *self)
+{
+  return self->stateful;
 }
 
 LogProtoClientFactory *log_proto_client_get_factory(PluginContext *context, const gchar *name);

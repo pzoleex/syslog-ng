@@ -40,7 +40,7 @@ m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 dnl ***************************************************************************
 dnl dependencies
 
-GLIB_MIN_VERSION="2.10.1"
+GLIB_MIN_VERSION="2.26.1"
 OPENSSL_MIN_VERSION="0.9.8"
 LIBDBI_MIN_VERSION="0.9.0"
 LIBRABBITMQ_MIN_VERSION="0.5.3"
@@ -129,7 +129,7 @@ if test "x$exec_prefix" = "xNONE"; then
 fi
 pidfiledir='${localstatedir}'
 moduledir='${exec_prefix}/lib/syslog-ng'
-loggenplugindir='${exec_prefix}/lib/syslog-ng/loggen'
+loggenplugindir='${moduledir}/loggen'
 toolsdir='${datadir}/syslog-ng/tools'
 xsddir='${datadir}/syslog-ng/xsd'
 
@@ -236,11 +236,6 @@ AC_ARG_ENABLE(mongodb,
 	      [  --enable-mongodb        Enable mongodb destination (default: auto)]
               ,,enable_mongodb="auto")
 
-AC_ARG_WITH(mongoc,
-              [  --with-mongoc=[system/internal/auto/no]
-                                         Link against the system supplied or the built-in mongo-c-driver library. (default: auto)]
-              ,,with_mongoc="internal")
-
 AC_ARG_ENABLE(legacy-mongodb-options,
               [  --enable-legacy-mongodb-options=[yes/no]
                                          Support libmongo-client non-URI MongoDB options. (default: yes)]
@@ -258,11 +253,6 @@ AC_ARG_ENABLE(json,
 AC_ARG_ENABLE(amqp,
           [  --enable-amqp        Enable amqp destination (default: auto)]
               ,,enable_amqp="auto")
-
-AC_ARG_WITH(librabbitmq-client,
-              [  --with-librabbitmq-client=[system/internal]
-                                         Link against the system supplied or the built-in librabbitmq library.]
-              ,,with_librabbitmq_client="internal")
 
 AC_ARG_ENABLE(stomp,
           [  --enable-stomp        Enable stomp destination (default: yes)]
@@ -396,8 +386,12 @@ AM_PROG_LEX
 AC_PROG_MAKE_SET
 PKG_PROG_PKG_CONFIG
 LT_INIT([dlopen disable-static])
-AC_PATH_PROG(PYTHON, python)
-if test -z "${PYTHON}"; then
+if test "x$with_python" = "xauto"; then
+  AM_PATH_PYTHON()
+else
+  AM_PATH_PYTHON([$with_python])
+fi
+if test "${PYTHON}" = ":"; then
 	AC_MSG_ERROR([Python interpreter is required])
 fi
 
@@ -446,10 +440,17 @@ fi
 dnl ***************************************************************************
 dnl Set up NO_PIE_LDFLAG: -no-pie is compatible with $CC.
 
+AX_COMPILER_VENDOR
+AX_COMPILER_VERSION
+
 if test $ostype = "Darwin"; then
   no_pie_ldflags="-Wl,-no_pie"
 else
-  no_pie_ldflags="-no-pie"
+  if test x$ax_cv_c_compiler_vendor = "xgnu"; then
+    AX_COMPARE_VERSION($ax_cv_c_compiler_version, gt, [4.5], [no_pie_ldflags="-no-pie"], [no_pie_ldflags=""])
+  else
+    no_pie_ldflags="-no-pie"
+  fi;
 fi
 
 old_LDFLAGS="$LDFLAGS"
@@ -777,6 +778,7 @@ AC_CHECK_FUNCS(strdup		\
 	strcasestr		\
 	memrchr			\
 	localtime_r		\
+	getprotobynumber_r	\
 	gmtime_r		\
 	strnlen			\
 	strtok_r)
@@ -795,8 +797,15 @@ dnl libevtlog headers/libraries (remove after relicensing libevtlog)
 dnl ***************************************************************************
 
 EVTLOG_LIBS="\$(top_builddir)/lib/eventlog/src/libevtlog.la"
-EVTLOG_NO_LIBTOOL_LIBS="\$(top_builddir)/lib/eventlog/src/.libs/libevtlog.la"
+EVTLOG_NO_LIBTOOL_LIBS="\$(top_builddir)/lib/eventlog/src/.libs/libevtlog.so"
 EVTLOG_CFLAGS="-I\$(top_srcdir)/lib/eventlog/src -I\$(top_builddir)/lib/eventlog/src"
+
+dnl ***************************************************************************
+dnl secret storage libraries
+dnl ***************************************************************************
+
+SECRETSTORAGE_LIBS="\$(top_builddir)/lib/secret-storage/libsecret-storage.la"
+SECRETSTORAGE_NO_LIBTOOL_LIBS="\$(top_builddir)/lib/secret-storage/.libs/libsecret-storage.so"
 
 dnl ***************************************************************************
 dnl libwrap headers/libraries
@@ -897,7 +906,7 @@ LDFLAGS="$LDFLAGS $GLIB_LIBS"
 
 old_LIBS=$LIBS
 LIBS="$LIBS $GLIB_LIBS"
-AC_CHECK_FUNCS(g_mapped_file_unref g_list_copy_deep g_queue_free_full g_list_free_full)
+AC_CHECK_FUNCS(g_list_copy_deep g_queue_free_full g_list_free_full)
 LIBS=$old_LIBS
 
 AC_CACHE_CHECK(sanity checking Glib headers,
@@ -1181,44 +1190,10 @@ else
 fi
 AC_DEFINE_UNQUOTED(ENABLE_LEGACY_MONGODB_OPTIONS, [$enable_legacy_mongodb_options_bit], [Support libmongo-client non-URI MongoDB options])
 
-if test "x$with_mongoc" = "xauto"; then
-  with_mongoc="system"
-  PKG_CHECK_MODULES(LIBMONGO, libmongoc-1.0 >= $LMC_MIN_VERSION,,with_mongoc="auto-internal")
-elif test "x$with_mongoc" = "xsystem"; then
-  PKG_CHECK_MODULES(LIBMONGO, libmongoc-1.0 >= $LMC_MIN_VERSION)
-fi
+PKG_CHECK_MODULES(LIBMONGO, libmongoc-1.0 >= $LMC_MIN_VERSION, with_mongoc="yes", with_mongoc="no")
 
-if test "x$with_mongoc" = "xinternal" || test "x$with_mongoc" = "xauto-internal"; then
-        with_mongoc="internal"
-	if test -f "$srcdir/modules/afmongodb/mongo-c-driver/src/mongoc/mongoc.h"; then
-		AC_CONFIG_SUBDIRS([modules/afmongodb/mongo-c-driver])
-
-		# these can only be used in modules/mongodb as it assumes
-		# the current directory just one below mongo-c-driver
-
-		LIBMONGO_LIBS="\
-			-L\$(top_builddir)/modules/afmongodb/mongo-c-driver \
-			-L\$(top_builddir)/modules/afmongodb/mongo-c-driver/src/libbson \
-			-lmongoc-1.0 -lbson $OPENSSL_LIBS"
-		LIBMONGO_CFLAGS="\
-			-I\$(top_srcdir)/modules/afmongodb/mongo-c-driver/src/mongoc \
-			-I\$(top_srcdir)/modules/afmongodb/mongo-c-driver/src/libbson/src/bson \
-			-I\$(top_builddir)/modules/afmongodb/mongo-c-driver/src/libbson/src/bson \
-			-I\$(top_builddir)/modules/afmongodb/mongo-c-driver/src/mongoc \
-		"
-		LIBMONGO_SUBDIRS="modules/afmongodb/mongo-c-driver"
-		AC_CHECK_LIB(sasl2, prop_get, LIBMONGO_LIBS="$LIBMONGO_LIBS -lsasl2")
-	else
-		AC_MSG_WARN([Internal mongo-c-driver sources not found in modules/afmongodb/mongo-c-driver])
-		with_mongoc="no"
-	fi
-fi
-
-if test "x$with_mongoc" = "xno"; then
-   if test "x$enable_mongodb" = "xyes"; then
-      AC_MSG_ERROR([Could not find mongo-c-driver, and MongoDB support was explicitly enabled.])
-   fi
-   enable_mongodb="no"
+if test "x$with_mongoc" = "xno" && test "x$enable_mongodb" = "xyes"; then
+   AC_MSG_ERROR([Could not find mongo-c-driver, and MongoDB support was explicitly enabled.])
 fi
 
 dnl ***************************************************************************
@@ -1317,47 +1292,12 @@ dnl ***************************************************************************
 dnl rabbitmq-c headers/libraries
 dnl ***************************************************************************
 
+PKG_CHECK_MODULES(LIBRABBITMQ, librabbitmq >= $LIBRABBITMQ_MIN_VERSION, with_librabbitmq_client="yes", with_librabbitmq_client="no")
 
-LIBRABBITMQ_INTERNAL_SOURCE_EXISTS="test -f $srcdir/modules/afamqp/rabbitmq-c/librabbitmq/amqp.h"
-
-if $LIBRABBITMQ_INTERNAL_SOURCE_EXISTS; then
-    PYTHON_VERSION=`python -V 2>&1 | cut -d ' ' -f 2`
-    PYTHON_MAJOR=`echo $PYTHON_VERSION | cut -d '.' -f 1`
-    PYTHON_MINOR=`echo $PYTHON_VERSION | cut -d '.' -f 2`
-    if test $PYTHON_MAJOR -eq 2 && test $PYTHON_MINOR -lt 5; then
-        AC_MSG_WARN([Was about to execute rabbitmq configure script, but that requires Python >= 2.5, which you don't seem to have, reverting to system rabbitmq])
-        with_librabbitmq_client="system"
-    else
-        AC_CONFIG_SUBDIRS([modules/afamqp/rabbitmq-c])
-        LIBRABBITMQ_SUBDIRS="modules/afamqp/rabbitmq-c"
-    fi
+if test "$enable_amqp" = "yes" && test "$with_librabbitmq_client" = "no"; then
+       AC_MSG_ERROR([Could not find librabbitmq-c, and AMQP support was explicitly enabled.])
 fi
 
-if test "x$with_librabbitmq_client" = "xinternal"; then
-    if $LIBRABBITMQ_INTERNAL_SOURCE_EXISTS; then
-        # these can only be used in modules/amqp as it assumes
-        # the current directory just one below rabbitmq-c
-
-        LIBRABBITMQ_LIBS="-L\$(top_builddir)/modules/afamqp/rabbitmq-c/librabbitmq -lrabbitmq"
-        LIBRABBITMQ_CFLAGS="-I\$(top_srcdir)/modules/afamqp/rabbitmq-c/librabbitmq -I\$(top_builddir)/modules/afamqp/rabbitmq-c/librabbitmq"
-    else
-        AC_MSG_WARN([Internal librabbitmq-client sources not found in modules/afamqp/rabbitmq-c])
-        with_librabbitmq_client="no"
-    fi
-elif test "x$with_librabbitmq_client" = "xsystem"; then
-    PKG_CHECK_MODULES(LIBRABBITMQ, librabbitmq >= $LIBRABBITMQ_MIN_VERSION,, enable_amqp="no")
-fi
-
-if test "x$with_librabbitmq_client" = "xno"; then
-    if test "x$enable_amqp" = "xyes"; then
-      AC_MSG_ERROR([Could not find librabbitmq-client, and AMQP support was explicitly enabled.])
-    fi
-    enable_amqp="no"
-fi
-
-if test "x$enable_amqp" = "xno"; then
-   with_librabbitmq_client="no"
-fi
 
 if test "x$enable_native" = "xyes" -o "x$enable_native" = "xauto"; then
     AC_CONFIG_FILES([syslog-ng-native-connector.pc])
@@ -1510,13 +1450,17 @@ fi
 
 
 if test "x$enable_linux_caps" = "xyes" -o "x$enable_linux_caps" = "xauto"; then
-        if test "x$ac_cv_header_sys_capability_h" = "xyes"; then
-                AC_CHECK_LIB(cap, cap_set_proc, LIBCAP_LIBS="-lcap"; has_linux_caps="yes", has_linux_caps="no")
-        else
-                has_linux_caps="no"
+        PKG_CHECK_MODULES(LIBCAP, libcap, has_linux_caps="yes", has_linux_caps="no")
+
+        if test "x$has_linux_caps" = "xno"; then
+                if test "x$ac_cv_header_sys_capability_h" = "xyes"; then
+                        AC_CHECK_LIB(cap, cap_set_proc, LIBCAP_LIBS="-lcap"; has_linux_caps="yes", has_linux_caps="no")
+                else
+                        has_linux_caps="no"
+                fi
+                AC_MSG_CHECKING(whether to enable Linux capability support)
+                AC_MSG_RESULT([$has_linux_caps])
         fi
-        AC_MSG_CHECKING(whether to enable Linux capability support)
-        AC_MSG_RESULT([$has_linux_caps])
 
         if test "x$enable_linux_caps" = "xyes" -a "x$has_linux_caps" = "xno"; then
            AC_MSG_ERROR([Cannot enable Linux capability support.])
@@ -1625,7 +1569,7 @@ if test "x$module_path" = "x"; then
 	java_module_path="$moduledir"/java-modules
 fi
 
-CPPFLAGS="$CPPFLAGS $GLIB_CFLAGS $EVTLOG_CFLAGS $PCRE_CFLAGS $OPENSSL_CFLAGS $LIBNET_CFLAGS $LIBDBI_CFLAGS $IVYKIS_CFLAGS -D_GNU_SOURCE -D_DEFAULT_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64"
+CPPFLAGS="$CPPFLAGS $GLIB_CFLAGS $EVTLOG_CFLAGS $PCRE_CFLAGS $OPENSSL_CFLAGS $LIBNET_CFLAGS $LIBDBI_CFLAGS $IVYKIS_CFLAGS $LIBCAP_CFLAGS -D_GNU_SOURCE -D_DEFAULT_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64"
 
 ########################################################
 ## NOTES: on how syslog-ng is linked
@@ -1673,7 +1617,7 @@ fi
 MODULE_DEPS_LIBS="\$(top_builddir)/lib/libsyslog-ng.la"
 
 if test "x$linking_mode" = "xdynamic"; then
-	SYSLOGNG_DEPS_LIBS="$LIBS $BASE_LIBS $GLIB_LIBS $EVTLOG_LIBS $RESOLV_LIBS $LIBCAP_LIBS $PCRE_LIBS $REGEX_LIBS $DL_LIBS"
+	SYSLOGNG_DEPS_LIBS="$LIBS $BASE_LIBS $GLIB_LIBS $EVTLOG_LIBS $SECRETSTORAGE_LIBS $RESOLV_LIBS $LIBCAP_LIBS $PCRE_LIBS $REGEX_LIBS $DL_LIBS"
 
 	if test "x$with_ivykis" = "xinternal"; then
 		# when using the internal ivykis, we're linking it statically into libsyslog-ng.so
@@ -1692,8 +1636,8 @@ if test "x$linking_mode" = "xdynamic"; then
 	# syslog-ng binary is linked with the default link command (e.g. libtool)
 	SYSLOGNG_LINK='$(LINK)'
 else
-	SYSLOGNG_DEPS_LIBS="$LIBS $BASE_LIBS $RESOLV_LIBS $LD_START_STATIC -Wl,${WHOLE_ARCHIVE_OPT} $GLIB_LIBS $EVTLOG_NO_LIBTOOL_LIBS $PCRE_LIBS $REGEX_LIBS  -Wl,${NO_WHOLE_ARCHIVE_OPT} $IVYKIS_NO_LIBTOOL_LIBS $LD_END_STATIC $LIBCAP_LIBS $DL_LIBS "
-	TOOL_DEPS_LIBS="$LIBS $BASE_LIBS $GLIB_LIBS $EVTLOG_LIBS $RESOLV_LIBS $LIBCAP_LIBS $PCRE_LIBS $REGEX_LIBS $IVYKIS_LIBS $DL_LIBS"
+	SYSLOGNG_DEPS_LIBS="$LIBS $BASE_LIBS $RESOLV_LIBS $EVTLOG_NO_LIBTOOL_LIBS $SECRETSTORAGE_NO_LIBTOOL_LIBS $LD_START_STATIC -Wl,${WHOLE_ARCHIVE_OPT} $GLIB_LIBS $PCRE_LIBS $REGEX_LIBS  -Wl,${NO_WHOLE_ARCHIVE_OPT} $IVYKIS_NO_LIBTOOL_LIBS $LD_END_STATIC $LIBCAP_LIBS $DL_LIBS"
+	TOOL_DEPS_LIBS="$LIBS $BASE_LIBS $GLIB_LIBS $EVTLOG_LIBS $SECRETSTORAGE_LIBS $RESOLV_LIBS $LIBCAP_LIBS $PCRE_LIBS $REGEX_LIBS $IVYKIS_LIBS $DL_LIBS"
 	CORE_DEPS_LIBS=""
 
 	# bypass libtool in case we want to do mixed linking because it
@@ -1896,8 +1840,6 @@ echo "  Criterion                   : ${with_criterion:=no}"
 echo "  Unit tests                  : ${enable_tests:=no}"
 echo " Submodules:"
 echo "  ivykis                      : $with_ivykis"
-echo "  mongoc                      : $with_mongoc"
-echo "  librabbitmq                 : $with_librabbitmq_client"
 echo "  jsonc                       : $with_jsonc"
 echo " Features:"
 echo "  Forced server mode          : ${enable_forced_server_mode:=yes}"

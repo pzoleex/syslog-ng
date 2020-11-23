@@ -572,15 +572,15 @@ log_expr_node_new_conditional_with_block(LogExprNode *block, YYLTYPE *yylloc)
 gint
 log_expr_node_lookup_flag(const gchar *flag)
 {
-  if (strcmp(flag, "catch-all") == 0 || strcmp(flag, "catchall") == 0 || strcmp(flag, "catch_all") == 0)
+  if (strcmp(flag, "catch-all") == 0 || strcmp(flag, "catchall") == 0)
     return LC_CATCHALL;
   else if (strcmp(flag, "fallback") == 0)
     return LC_FALLBACK;
   else if (strcmp(flag, "final") == 0)
     return LC_FINAL;
-  else if (strcmp(flag, "flow_control") == 0 || strcmp(flag, "flow-control") == 0)
+  else if (strcmp(flag, "flow-control") == 0)
     return LC_FLOW_CONTROL;
-  else if (strcmp(flag, "drop_unmatched") == 0 || strcmp(flag, "drop-unmatched") == 0)
+  else if (strcmp(flag, "drop-unmatched") == 0)
     return LC_DROP_UNMATCHED;
   msg_error("Unknown log statement flag", evt_tag_str("flag", flag));
   return 0;
@@ -604,6 +604,12 @@ cfg_tree_new_mpx(CfgTree *self, LogExprNode *related_expr)
   return pipe;
 }
 
+static gchar *
+_format_anon_rule_name(CfgTree *self, gint content)
+{
+  return g_strdup_printf("#anon-%s%d", log_expr_node_get_content_name(content), self->anon_counters[content]++);
+}
+
 /*
  * Return the name of the rule that contains a LogExprNode. Generates
  * one automatically for anonymous log expressions.
@@ -613,11 +619,21 @@ cfg_tree_new_mpx(CfgTree *self, LogExprNode *related_expr)
 gchar *
 cfg_tree_get_rule_name(CfgTree *self, gint content, LogExprNode *node)
 {
-  LogExprNode *rule = log_expr_node_get_container_rule(node, content);
+  gchar *rule_name;
 
-  if (!rule->name)
-    rule->name = g_strdup_printf("#anon-%s%d", log_expr_node_get_content_name(content), self->anon_counters[content]++);
-  return g_strdup(rule->name);
+  if (node)
+    {
+      LogExprNode *rule = log_expr_node_get_container_rule(node, content);
+      if (!rule->name)
+        rule->name = _format_anon_rule_name(self, content);
+      rule_name = g_strdup(rule->name);
+    }
+  else
+    {
+      rule_name = _format_anon_rule_name(self, content);
+    }
+
+  return rule_name;
 }
 
 /*
@@ -629,11 +645,18 @@ cfg_tree_get_rule_name(CfgTree *self, gint content, LogExprNode *node)
 gchar *
 cfg_tree_get_child_id(CfgTree *self, gint content, LogExprNode *node)
 {
-  LogExprNode *rule = log_expr_node_get_container_rule(node, content);
   gchar *rule_name = cfg_tree_get_rule_name(self, content, node);
+  gint cur_child_id;
   gchar *res;
 
-  res = g_strdup_printf("%s#%d", rule_name, rule->child_id++);
+  if (node)
+    {
+      LogExprNode *rule = log_expr_node_get_container_rule(node, content);
+      cur_child_id = rule->child_id++;
+    }
+  else
+    cur_child_id = 0;
+  res = g_strdup_printf("%s#%d", rule_name, cur_child_id);
   g_free(rule_name);
   return res;
 }
@@ -1056,6 +1079,7 @@ cfg_tree_compile_junction(CfgTree *self,
           if (!fork_mpx)
             {
               fork_mpx = cfg_tree_new_mpx(self, node);
+              *outer_pipe_head = &fork_mpx->super;
             }
           log_multiplexer_add_next_hop(fork_mpx, sub_pipe_head);
         }
@@ -1082,7 +1106,6 @@ cfg_tree_compile_junction(CfgTree *self,
         }
     }
 
-  *outer_pipe_head = &fork_mpx->super;
   if (outer_pipe_tail)
     *outer_pipe_tail = join_pipe;
   return TRUE;
@@ -1107,7 +1130,7 @@ cfg_tree_compile_node(CfgTree *self, LogExprNode *node,
   gboolean result = FALSE;
   static gint indent = -1;
 
-  if (debug_flag)
+  if (trace_flag)
     {
       gchar buf[128];
       gchar compile_message[256];

@@ -394,47 +394,109 @@ tf_replace_delimiter(LogMessage *msg, gint argc, GString *argv[], GString *resul
 
 TEMPLATE_FUNCTION_SIMPLE(tf_replace_delimiter);
 
-static void
-tf_string_padding(LogMessage *msg, gint argc, GString *argv[], GString *result)
+typedef struct _TFStringPaddingState
 {
-  GString *text = argv[0];
-  GString *padding;
-  gint64 width, i;
+  TFSimpleFuncState super;
+  GString *padding_pattern;
+  gint64  width;
+} TFStringPaddingState;
 
-  if (argc <= 1)
+static gboolean
+_padding_prepare_parse_state(TFStringPaddingState *state, gint argc, gchar **argv, GError **error)
+{
+  if (argc < 3)
     {
-      msg_debug("Not enough arguments for padding template function!");
-      return;
+      g_set_error(error, LOG_TEMPLATE_ERROR, LOG_TEMPLATE_ERROR_COMPILE,
+                  "$(padding) Not enough arguments, usage $(padding <input> <width> [padding string])");
+      return FALSE;
     }
 
-  if (!parse_number_with_suffix(argv[1]->str, &width))
+  if (!parse_number(argv[2], &state->width))
     {
-      msg_debug("Padding template function requires a number as second argument!");
-      return;
-    }
 
-  if (argc <= 2)
-    padding = g_string_new(" ");
+      g_set_error(error, LOG_TEMPLATE_ERROR, LOG_TEMPLATE_ERROR_COMPILE,
+                  "Padding template function requires a number as second argument!");
+      return FALSE;
+    }
+  return TRUE;
+}
+
+static void
+_padding_prepare_fill_padding_pattern(TFStringPaddingState *state, gint argc, gchar **argv)
+{
+  state->padding_pattern = g_string_sized_new(state->width);
+  if (argc < 4)
+    {
+      g_string_printf(state->padding_pattern, "%*s", (int)(state->width), "");
+    }
   else
-    padding = argv[2];
-
-  if (text->len < width)
     {
-      for (i = 0; i < width - text->len; i++)
+      gint len = strlen(argv[3]);
+      if (len < 1)
         {
-          g_string_append_c(result, *(padding->str + (i % padding->len)));
+          g_string_printf(state->padding_pattern, "%*s", (int)(state->width), "");
         }
-    }
-
-  g_string_append_len(result, text->str, text->len);
-
-  if (argc <= 2)
-    {
-      g_string_free(padding, TRUE);
+      else
+        {
+          gint repeat = state->width / len; // integer division!
+          for (gint i = 0; i < repeat; i++)
+            {
+              g_string_append_len(state->padding_pattern, argv[3], len);
+            }
+          g_string_append_len(state->padding_pattern, argv[3], state->width - (repeat * len));
+        }
     }
 }
 
-TEMPLATE_FUNCTION_SIMPLE(tf_string_padding);
+static gboolean
+tf_string_padding_prepare(LogTemplateFunction *self, gpointer s, LogTemplate *parent,
+                          gint argc, gchar *argv[], GError **error)
+{
+  TFStringPaddingState *state = (TFStringPaddingState *) s;
+
+  if (!_padding_prepare_parse_state(state, argc, argv, error))
+    return FALSE;
+
+  _padding_prepare_fill_padding_pattern(state, argc, argv);
+
+  if (!tf_simple_func_prepare(self, state, parent, 2, argv, error))
+    {
+      g_set_error(error, LOG_TEMPLATE_ERROR, LOG_TEMPLATE_ERROR_COMPILE,
+                  "padding: prepare failed");
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
+static void
+tf_string_padding_call(LogTemplateFunction *self, gpointer s, const LogTemplateInvokeArgs *args, GString *result)
+{
+  TFStringPaddingState *state = (TFStringPaddingState *) s;
+  GString **argv = (GString **) args->bufs->pdata;
+
+  if (argv[0]->len > state->width)
+    {
+      g_string_append_len(result, argv[0]->str, argv[0]->len);
+    }
+  else
+    {
+      g_string_append_len(result, state->padding_pattern->str, state->width - argv[0]->len);
+      g_string_append_len(result, argv[0]->str, argv[0]->len);
+    }
+}
+
+static void
+tf_string_padding_free_state(gpointer s)
+{
+  TFStringPaddingState *state = (TFStringPaddingState *) s;
+  if (state->padding_pattern)
+    g_string_free(state->padding_pattern, TRUE);
+  tf_simple_func_free_state(&state->super);
+}
+
+TEMPLATE_FUNCTION(TFStringPaddingState, tf_string_padding, tf_string_padding_prepare,
+                  tf_simple_func_eval, tf_string_padding_call, tf_string_padding_free_state, NULL);
 
 typedef struct _TFBinaryState
 {
@@ -508,3 +570,57 @@ tf_binary_free_state(gpointer s)
 
 TEMPLATE_FUNCTION(TFBinaryState, tf_binary, tf_binary_prepare, tf_simple_func_eval, tf_binary_call,
                   tf_binary_free_state, NULL);
+
+static inline gsize
+_get_base64_encoded_size(gsize len)
+{
+  return (len / 3 + 1) * 4 + 4;
+}
+
+static void
+tf_base64encode(LogMessage *msg, gint argc, GString *argv[], GString *result)
+{
+  gint i;
+  gint state = 0;
+  gint save = 0;
+  gsize out_len = 0;
+  gsize init_len = result->len;
+
+  for (i = 0; i < argc; i++)
+    {
+      /* expand the buffer and add space for the base64 encoded string */
+      g_string_set_size(result, init_len + out_len + _get_base64_encoded_size(argv[i]->len));
+      out_len +=
+        g_base64_encode_step((guchar *) argv[i]->str, argv[i]->len,
+                             FALSE /* break_lines */,
+                             result->str + init_len + out_len,
+                             &state, &save);
+    }
+  g_string_set_size(result, init_len + out_len + _get_base64_encoded_size(0));
+
+#if !GLIB_CHECK_VERSION(2, 54, 0)
+  /* NOTE: this is an ugly workaround for glib versions < 2.54 (which is
+   * pretty recent and not widely available yet) to fix an encoding issue.
+   *
+   * This is the bug:
+   *    https://bugzilla.gnome.org/show_bug.cgi?id=780066
+   *
+   * This is the fix:
+   *    https://gitlab.gnome.org/GNOME/glib/commits/35c0dd2755dbcea2539117cf33959a1a9e497f12
+   *
+   * We basically set the c2 byte used in a base64 encode to zero, if only 1
+   * remaining byte is there. Read the bugreport for reasons.
+   *
+   * Yes, I've actually stumbled into this in the unit test and could easily
+   * anyone.
+   */
+
+  if (((unsigned char *) &save)[0] == 1)
+    ((unsigned char *) &save)[2] = 0;
+#endif
+  out_len += g_base64_encode_close(FALSE, result->str + init_len + out_len, &state, &save);
+
+  g_string_set_size(result, init_len + out_len);
+};
+
+TEMPLATE_FUNCTION_SIMPLE(tf_base64encode);

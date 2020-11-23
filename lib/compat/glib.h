@@ -30,10 +30,6 @@
 
 #include <glib.h>
 
-#if !SYSLOG_NG_HAVE_G_MAPPED_FILE_UNREF
-#define g_mapped_file_unref g_mapped_file_free
-#endif
-
 #if !SYSLOG_NG_HAVE_G_LIST_COPY_DEEP
 GList *g_list_copy_deep (GList *list, GCopyFunc func, gpointer user_data);
 #endif
@@ -52,6 +48,27 @@ GList *g_list_copy_deep (GList *list, GCopyFunc func, gpointer user_data);
     (void) (0 ? (gpointer) *(atomic) : 0);                                   \
     (void) (0 ? (val) ^ (val) : 0);                                          \
     (gssize) __sync_fetch_and_add ((atomic), (val));                         \
+  }))
+#define g_atomic_pointer_or(atomic, val) \
+  (G_GNUC_EXTENSION ({                                                       \
+    G_STATIC_ASSERT (sizeof *(atomic) == sizeof (gpointer));                 \
+    (void) (0 ? (gpointer) *(atomic) : 0);                                   \
+    (void) (0 ? (val) ^ (val) : 0);                                          \
+    (gsize) __sync_fetch_and_or ((atomic), (val));                           \
+  }))
+#define g_atomic_pointer_xor(atomic, val) \
+  (G_GNUC_EXTENSION ({                                                       \
+    G_STATIC_ASSERT (sizeof *(atomic) == sizeof (gpointer));                 \
+    (void) (0 ? (gpointer) *(atomic) : 0);                                   \
+    (void) (0 ? (val) ^ (val) : 0);                                          \
+    (gsize) __sync_fetch_and_xor ((atomic), (val));                          \
+  }))
+#define g_atomic_pointer_and(atomic, val) \
+  (G_GNUC_EXTENSION ({                                                       \
+    G_STATIC_ASSERT (sizeof *(atomic) == sizeof (gpointer));                 \
+    (void) (0 ? (gpointer) *(atomic) : 0);                                   \
+    (void) (0 ? (val) ^ (val) : 0);                                          \
+    (gsize) __sync_fetch_and_and ((atomic), (val));                          \
   }))
 
 #endif

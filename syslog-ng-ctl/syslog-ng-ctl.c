@@ -27,6 +27,7 @@
 #include "control-client.h"
 #include "cfg.h"
 #include "reloc.h"
+#include "secret-storage/secret-storage.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -111,7 +112,7 @@ _dispatch_command(const gchar *cmd)
 
   clear_and_free(rsp);
 
-  memset(dispatchable_command, 0, strlen(dispatchable_command));
+  secret_storage_wipe(dispatchable_command, strlen(dispatchable_command));
   g_free(dispatchable_command);
 
   return retval;
@@ -298,12 +299,11 @@ _is_query_params_empty(void)
   return raw_query_params == NULL;
 }
 
-static gchar *
+static void
 _shift_query_command_out_of_params(void)
 {
   if (raw_query_params[QUERY_COMMAND] != NULL)
-    return *(raw_query_params++);
-  return *raw_query_params;
+    ++raw_query_params;
 }
 
 static gboolean
@@ -348,7 +348,7 @@ _get_dispatchable_query_command(void)
   if (query_cmd < 0)
     return NULL;
 
-  *raw_query_params = _shift_query_command_out_of_params();
+  _shift_query_command_out_of_params();
   if(_validate_get_params(query_cmd))
     return NULL;
 
@@ -474,15 +474,15 @@ slng_passwd_add(int argc, char *argv[], const gchar *mode, GOptionContext *ctx)
   if (retval == -1)
     g_assert_not_reached();
 
-  memset(secret_to_store, 0, strlen(secret_to_store));
+  secret_storage_wipe(secret_to_store, strlen(secret_to_store));
   g_free(secret_to_store);
 
   if (credentials_secret)
-    memset(credentials_secret, 0, strlen(credentials_secret));
+    secret_storage_wipe(credentials_secret, strlen(credentials_secret));
 
   gint result = _dispatch_command(answer);
 
-  memset(answer, 0, strlen(answer));
+  secret_storage_wipe(answer, strlen(answer));
   g_free(answer);
 
   return result;
@@ -636,6 +636,7 @@ main(int argc, char *argv[])
   GString *cmdname_accumulator = g_string_new(argv[0]);
   CommandDescriptor *active_mode = find_active_mode(modes, &argc, argv, cmdname_accumulator);
   GOptionContext *ctx = setup_help_context(cmdname_accumulator->str, active_mode);
+  g_string_free(cmdname_accumulator, TRUE);
 
   if (!ctx)
     {

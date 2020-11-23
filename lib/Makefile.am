@@ -58,7 +58,8 @@ lib/ivykis/src/libivykis.la:
 CLEAN_SUBDIRS				+= @IVYKIS_SUBDIRS@
 
 EXTRA_DIST += \
-	lib/ivykis/configure.gnu
+	lib/ivykis/configure.gnu	\
+	lib/CMakeLists.txt
 
 install-ivykis:
 	${MAKE} -C lib/ivykis/src \
@@ -91,6 +92,7 @@ pkginclude_HEADERS			+= \
 	lib/alarms.h			\
 	lib/apphook.h			\
 	lib/atomic.h			\
+	lib/atomic-gssize.h \
 	lib/block-ref-parser.h		\
 	lib/cache.h			\
 	lib/cfg.h			\
@@ -125,6 +127,7 @@ pkginclude_HEADERS			+= \
 	lib/logthrdestdrv.h		\
 	lib/logwriter.h			\
 	lib/mainloop.h			\
+	lib/signal-handler.h		\
 	lib/mainloop-call.h		\
 	lib/mainloop-worker.h		\
 	lib/mainloop-io-worker.h	\
@@ -169,9 +172,11 @@ pkginclude_HEADERS			+= \
 	lib/bookmark.h			\
 	lib/ringbuffer.h		\
 	lib/ack_tracker.h		\
+	lib/late_ack_tracker.h \
 	lib/host-id.h			\
 	lib/resolved-configurable-paths.h \
-	lib/pe-versioning.h
+	lib/pe-versioning.h \
+	lib/window-size-counter.h
 
 # this is intentionally formatted so conflicts are less likely to arise. one name in every line.
 lib_libsyslog_ng_la_SOURCES		= \
@@ -211,6 +216,7 @@ lib_libsyslog_ng_la_SOURCES		= \
 	lib/logthrdestdrv.c		\
 	lib/logwriter.c			\
 	lib/mainloop.c			\
+	lib/signal-handler.c		\
 	lib/mainloop-call.c		\
 	lib/mainloop-worker.c		\
 	lib/mainloop-io-worker.c	\
@@ -250,6 +256,7 @@ lib_libsyslog_ng_la_SOURCES		= \
 	$(transport_crypto_sources)	\
 	lib/host-id.c			\
 	lib/resolved-configurable-paths.c \
+	lib/window-size-counter.c \
 					\
 	lib/cfg-lex.l			\
 	lib/cfg-grammar.y		\
@@ -302,6 +309,4 @@ endif
 
 .PHONY: lib/ libsyslog-ng ivykis lib/ivykis/ lib/jsonc/ jsonc
 
-if ENABLE_TESTING
 include lib/tests/Makefile.am
-endif

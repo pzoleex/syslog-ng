@@ -39,11 +39,15 @@ _process(LogParser *s, LogMessage **pmsg, const LogPathOptions *path_options,
          const gchar *input, gsize input_len)
 {
   MapValuePairs *self = (MapValuePairs *) s;
+  GlobalConfig *cfg = log_pipe_get_config(&s->super);
   LogMessage *msg = log_msg_make_writable(pmsg, path_options);
+  msg_trace("value-pairs message processing started",
+            evt_tag_str ("input", input),
+            evt_tag_printf("msg", "%p", *pmsg));
 
   value_pairs_foreach(self->value_pairs, _map_name_values,
                       msg,
-                      0, LTZ_LOCAL, NULL,
+                      0, LTZ_LOCAL, &cfg->template_options,
                       msg);
 
   return TRUE;

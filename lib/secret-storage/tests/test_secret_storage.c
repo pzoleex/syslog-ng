@@ -263,11 +263,11 @@ Test(secretstorage, test_rlimit)
   cr_assert(!getrlimit(RLIMIT_MEMLOCK, &locked_limit));
   locked_limit.rlim_cur = MIN(locked_limit.rlim_max, 64 * 1024);
   cr_assert(!setrlimit(RLIMIT_MEMLOCK, &locked_limit));
-  const gsize PAGESIZE = sysconf(_SC_PAGE_SIZE);
+  const gsize pagesize = sysconf(_SC_PAGE_SIZE);
 
   gchar *key_fmt = g_strdup("keyXXX");
   int i = 0;
-  int for_limit = locked_limit.rlim_cur/PAGESIZE;
+  int for_limit = locked_limit.rlim_cur/pagesize;
   for (; i < for_limit; i++)
     {
       sprintf(key_fmt, "key%03d", i);
@@ -306,4 +306,18 @@ Test(secretstorage, test_state_update)
   secret_storage_subscribe_for_key("key", update_state_callback, NULL);
   secret_storage_store_string("key", "wrong_password");
   secret_storage_status_foreach(assert_invalid_password_state, NULL);
+}
+
+Test(secretstorage, simple_store_get_and_wipe)
+{
+  secret_storage_store_secret("key1", "value1", -1);
+  Secret *secret = secret_storage_get_secret_by_name("key1");
+  cr_assert_str_eq(secret->data, "value1");
+
+  secret_storage_wipe(secret->data, secret->len);
+
+  for (gsize i = 0; i < secret->len; ++i)
+    cr_assert_eq(secret->data[i], 0);
+
+  secret_storage_put_secret(secret);
 }

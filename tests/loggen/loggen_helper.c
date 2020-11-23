@@ -22,9 +22,15 @@
  */
 
 #include "loggen_helper.h"
+
 #include <syslog-ng-config.h>
+#include <string.h>
 #include <unistd.h>
+#include <time.h>
+#include <arpa/inet.h>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 #include <openssl/err.h>
 
 static int debug = 0;
@@ -142,7 +148,15 @@ int connect_unix_domain_socket(int sock_type, const char *path)
 
   DEBUG("unix domain socket: %s\n",path);
   saun.sun_family = AF_UNIX;
-  strncpy(saun.sun_path, path, sizeof(saun.sun_path));
+
+  gsize max_target_path_size = sizeof(saun.sun_path);
+  if (strlen(path) >= max_target_path_size)
+    {
+      ERROR("Target path is too long; max_target_length=%" G_GSIZE_FORMAT "\n", max_target_path_size - 1);
+      return -1;
+    }
+
+  strcpy(saun.sun_path, path);
 
   dest_addr = (struct sockaddr *) &saun;
   dest_addr_len = sizeof(saun);
@@ -185,6 +199,17 @@ get_now_timestamp(char *stamp, gsize stamp_size)
   gettimeofday(&now, NULL);
   localtime_r(&now.tv_sec, &tm);
   return strftime(stamp, stamp_size, "%Y-%m-%dT%H:%M:%S", &tm);
+}
+
+size_t
+get_now_timestamp_bsd(char *stamp, gsize stamp_size)
+{
+  struct timeval now;
+  struct tm tm;
+
+  gettimeofday(&now, NULL);
+  localtime_r(&now.tv_sec, &tm);
+  return strftime(stamp, stamp_size, "%b %d %T", &tm);
 }
 
 void

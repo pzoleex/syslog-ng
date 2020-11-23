@@ -60,12 +60,19 @@ struct _LogReader
   GStaticMutex pending_proto_lock;
   LogProtoServer *pending_proto;
   PollEvents *pending_poll_events;
+
+  struct iv_timer idle_timer;
 };
 
 static gboolean log_reader_fetch_log(LogReader *self);
 
 static void log_reader_stop_watches(LogReader *self);
+static void log_reader_stop_idle_timer(LogReader *self);
+static void log_reader_idle_timeout(void *cookie);
+
 static void log_reader_update_watches(LogReader *self);
+
+static void log_reader_wakeup(LogSource *s);
 
 static void
 log_reader_apply_proto_and_poll_events(LogReader *self, LogProtoServer *proto, PollEvents *poll_events)
@@ -76,6 +83,10 @@ log_reader_apply_proto_and_poll_events(LogReader *self, LogProtoServer *proto, P
     poll_events_free(self->poll_events);
 
   self->proto = proto;
+
+  if (self->proto)
+    log_proto_server_set_wakeup_cb(self->proto, (LogProtoServerWakeupFunc) log_reader_wakeup, self);
+
   self->poll_events = poll_events;
 }
 
@@ -225,6 +236,10 @@ log_reader_init_watches(LogReader *self)
   self->last_msg_sent_event.cookie = self;
   self->last_msg_sent_event.handler = _last_msg_sent;
 
+  IV_TIMER_INIT(&self->idle_timer);
+  self->idle_timer.cookie = self;
+  self->idle_timer.handler = log_reader_idle_timeout;
+
   main_loop_io_worker_job_init(&self->io_job);
   self->io_job.user_data = self;
   self->io_job.work = (void (*)(void *)) log_reader_work_perform;
@@ -242,6 +257,13 @@ log_reader_stop_watches(LogReader *self)
         iv_task_unregister(&self->restart_task);
       self->watches_running = FALSE;
     }
+}
+
+static void
+log_reader_stop_idle_timer(LogReader *self)
+{
+  if (iv_timer_registered(&self->idle_timer))
+    iv_timer_unregister(&self->idle_timer);
 }
 
 static void
@@ -285,30 +307,57 @@ static void
 log_reader_update_watches(LogReader *self)
 {
   GIOCondition cond;
-  gboolean free_to_send;
-  gboolean line_is_ready_in_buffer;
+  gint idle_timeout = -1;
 
   main_loop_assert_main_thread();
+
+  log_reader_stop_idle_timer(self);
 
   if (!log_reader_is_opened(self))
     return;
 
   log_reader_start_watches_if_stopped(self);
 
-  free_to_send = log_source_free_to_send(&self->super);
+  gboolean free_to_send = log_source_free_to_send(&self->super);
   if (!free_to_send)
     {
       log_reader_suspend_until_awoken(self);
       return;
     }
 
-  line_is_ready_in_buffer = log_proto_server_prepare(self->proto, &cond);
-  if (self->immediate_check || line_is_ready_in_buffer)
+  LogProtoPrepareAction prepare_action = log_proto_server_prepare(self->proto, &cond, &idle_timeout);
+
+  if (idle_timeout > 0)
+    {
+      iv_validate_now();
+
+      self->idle_timer.expires = iv_now;
+      self->idle_timer.expires.tv_sec += idle_timeout;
+
+      iv_timer_register(&self->idle_timer);
+    }
+
+  if (self->immediate_check)
     {
       log_reader_force_check_in_next_poll(self);
       return;
     }
-  poll_events_update_watches(self->poll_events, cond);
+
+  switch (prepare_action)
+    {
+    case LPPA_POLL_IO:
+      poll_events_update_watches(self->poll_events, cond);
+      break;
+    case LPPA_FORCE_SCHEDULE_FETCH:
+      log_reader_force_check_in_next_poll(self);
+      break;
+    case LPPA_SUSPEND:
+      log_reader_suspend_until_awoken(self);
+      break;
+    default:
+      g_assert_not_reached();
+      break;
+    }
 }
 
 static void
@@ -474,6 +523,8 @@ log_reader_deinit(LogPipe *s)
   iv_event_unregister(&self->schedule_wakeup);
   iv_event_unregister(&self->last_msg_sent_event);
   log_reader_stop_watches(self);
+  log_reader_stop_idle_timer(self);
+
   if (!log_source_deinit(s))
     return FALSE;
 
@@ -523,6 +574,7 @@ log_reader_set_options(LogReader *s, LogPipe *control, LogReaderOptions *options
 
   self->options = options;
   log_proto_server_set_options(self->proto, &self->options->proto_options.super);
+  log_proto_server_set_ack_tracker(self->proto, self->super.ack_tracker);
 }
 
 /* run in the main thread in reaction to a log_reader_reopen to change
@@ -546,6 +598,7 @@ log_reader_reopen_deferred(gpointer s)
     }
 
   log_reader_stop_watches(self);
+  log_reader_stop_idle_timer(self);
   log_reader_apply_proto_and_poll_events(self, proto, poll_events);
   log_reader_update_watches(self);
 }
@@ -566,6 +619,23 @@ log_reader_reopen(LogReader *self, LogProtoServer *proto, PollEvents *poll_event
         }
       g_static_mutex_unlock(&self->pending_proto_lock);
     }
+}
+
+void
+log_reader_close_proto(LogReader *self)
+{
+  log_reader_reopen(self, NULL, NULL);
+}
+
+static void
+log_reader_idle_timeout(void *cookie)
+{
+  LogReader *self = (LogReader *) cookie;
+
+  msg_notice("Source timeout has elapsed, closing connection",
+             evt_tag_int("fd", log_proto_server_get_fd(self->proto)));
+
+  log_pipe_notify(self->control, NC_CLOSE, self);
 }
 
 void

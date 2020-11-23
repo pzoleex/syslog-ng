@@ -139,11 +139,9 @@ file_perm_options_defaults(FilePermOptions *self)
 void
 file_perm_options_global_defaults(FilePermOptions *self)
 {
-  self->file_uid = 0;
-  self->file_gid = 0;
+  self->file_uid = self->file_gid = -1;
   self->file_perm = 0600;
-  self->dir_uid = 0;
-  self->dir_gid = 0;
+  self->dir_uid = self->dir_gid = -1;
   self->dir_perm = 0700;
 }
 
@@ -289,8 +287,8 @@ file_perm_options_create_containing_directory(const FilePermOptions *self, const
               goto finish;
             }
           saved_caps = g_process_cap_save();
-          g_process_cap_modify(CAP_CHOWN, TRUE);
-          g_process_cap_modify(CAP_FOWNER, TRUE);
+          g_process_enable_cap("cap_chown");
+          g_process_enable_cap("cap_fowner");
           file_perm_options_apply_dir(self, _path);
           g_process_cap_restore(saved_caps);
         }

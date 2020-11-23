@@ -39,7 +39,7 @@
 
 typedef struct
 {
-  LogThrDestDriver super;
+  LogThreadedDestDriver super;
 
   gchar *destination;
   LogTemplate *body_template;
@@ -157,8 +157,8 @@ afstomp_dd_get_template_options(LogDriver *s)
  * Utilities
  */
 
-static gchar *
-afstomp_dd_format_stats_instance(LogThrDestDriver *s)
+static const gchar *
+afstomp_dd_format_stats_instance(LogThreadedDestDriver *s)
 {
   STOMPDestDriver *self = (STOMPDestDriver *) s;
   static gchar persist_name[1024];
@@ -241,7 +241,7 @@ afstomp_dd_connect(STOMPDestDriver *self, gboolean reconnect)
 }
 
 static void
-afstomp_dd_disconnect(LogThrDestDriver *s)
+afstomp_dd_disconnect(LogThreadedDestDriver *s)
 {
   STOMPDestDriver *self = (STOMPDestDriver *)s;
 
@@ -319,7 +319,7 @@ afstomp_worker_publish(STOMPDestDriver *self, LogMessage *msg)
 }
 
 static worker_insert_result_t
-afstomp_worker_insert(LogThrDestDriver *s, LogMessage *msg)
+afstomp_worker_insert(LogThreadedDestDriver *s, LogMessage *msg)
 {
   STOMPDestDriver *self = (STOMPDestDriver *)s;
 
@@ -333,7 +333,7 @@ afstomp_worker_insert(LogThrDestDriver *s, LogMessage *msg)
 }
 
 static void
-afstomp_worker_thread_init(LogThrDestDriver *s)
+afstomp_worker_thread_init(LogThreadedDestDriver *s)
 {
   STOMPDestDriver *self = (STOMPDestDriver *) s;
 
@@ -358,7 +358,7 @@ afstomp_dd_init(LogPipe *s)
               evt_tag_int("port", self->port),
               evt_tag_str("destination", self->destination));
 
-  return log_threaded_dest_driver_start(s);
+  return log_threaded_dest_driver_init_method(s);
 }
 
 static void
@@ -391,7 +391,7 @@ afstomp_dd_new(GlobalConfig *cfg)
   self->super.worker.disconnect = afstomp_dd_disconnect;
   self->super.worker.insert = afstomp_worker_insert;
 
-  self->super.format.stats_instance = afstomp_dd_format_stats_instance;
+  self->super.format_stats_instance = afstomp_dd_format_stats_instance;
   self->super.stats_source = SCS_STOMP;
 
   afstomp_dd_set_host((LogDriver *) self, "127.0.0.1");

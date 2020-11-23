@@ -21,16 +21,21 @@
  *
  */
 
+#include "compat/glib.h"
 #include "loggen_plugin.h"
 #include "loggen_helper.h"
+#include "crypto.h"
 
+#include <stddef.h>
 #include <stdio.h>
+#include <sys/time.h>
 #include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 #include <unistd.h>
 #include <string.h>
 #include <netdb.h>
 
-#include <crypto.h>
 #include <openssl/crypto.h>
 #include <openssl/x509.h>
 #include <openssl/pem.h>
@@ -96,6 +101,9 @@ set_generate_message(generate_message_func gen_message)
 static gint
 get_thread_count(void)
 {
+  if (!thread_lock)
+    return 0;
+
   int num;
   g_mutex_lock(thread_lock);
   num = active_thread_count+idle_thread_count;

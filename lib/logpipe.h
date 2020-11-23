@@ -210,22 +210,12 @@ struct _LogPathOptions
 };
 
 #define LOG_PATH_OPTIONS_INIT { TRUE, FALSE, NULL }
+#define LOG_PATH_OPTIONS_INIT_NOACK { FALSE, FALSE, NULL }
 
 struct _LogPipe
 {
   GAtomicCounter ref_cnt;
   gint32 flags;
-
-  /* moving queue to the front should improve performance somewhat, although
-   * I didn't measure it at all.  Rationale: the pointer pointing to this
-   * LogPipe instance is resolved right before calling queue and the
-   * colocation of flags and the queue pointer ensures that they are on the
-   * same cache line, and since the CPU returns memory reads sequentially,
-   * it is among the first values that are read ahead.  It might need to be
-   * measured sometime, but this method is probably the single most often
-   * called virual method, so I felt, that even though the optimization is
-   * probably premature without explicit tests, I can do this simply by
-   * believing it helps :) */
 
   void (*queue)(LogPipe *self, LogMessage *msg, const LogPathOptions *path_options);
 
@@ -252,6 +242,16 @@ struct _LogPipe
   void (*free_fn)(LogPipe *self);
   void (*notify)(LogPipe *self, gint notify_code, gpointer user_data);
 };
+
+/*
+   cpu-cache optimization: queue method should be as close as possible to flags.
+
+   Rationale: the pointer pointing to this LogPipe instance is
+   resolved right before calling queue and the colocation of flags and
+   the queue pointer ensures that they are on the same cache line. The
+   queue method is probably the single most often called virtual method
+ */
+G_STATIC_ASSERT(G_STRUCT_OFFSET(LogPipe, queue) - G_STRUCT_OFFSET(LogPipe, flags) <= 4);
 
 extern gboolean (*pipe_single_step_hook)(LogPipe *pipe, LogMessage *msg, const LogPathOptions *path_options);
 
@@ -351,11 +351,8 @@ log_pipe_queue(LogPipe *s, LogMessage *msg, const LogPathOptions *path_options)
 
       local_path_options.flow_control_requested = 1;
       path_options = &local_path_options;
-      if (G_UNLIKELY(debug_flag))
-        {
-          msg_debug("Requesting flow control",
-                    log_pipe_location_tag(s));
-        }
+
+      msg_debug("Requesting flow control", log_pipe_location_tag(s));
     }
 
   if (s->queue)

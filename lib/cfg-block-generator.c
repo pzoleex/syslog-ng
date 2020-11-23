@@ -35,9 +35,17 @@ cfg_block_generator_format_name_method(CfgBlockGenerator *self, gchar *buf, gsiz
 }
 
 gboolean
-cfg_block_generator_generate(CfgBlockGenerator *self, GlobalConfig *cfg, CfgArgs *args, GString *result)
+cfg_block_generator_generate(CfgBlockGenerator *self, GlobalConfig *cfg, CfgArgs *args, GString *result,
+                             const gchar *reference)
 {
-  return self->generate(self, cfg, args, result);
+  gchar block_name[1024];
+  cfg_block_generator_format_name(self, block_name, sizeof(block_name)/sizeof(block_name[0]));
+
+  g_string_append_printf(result, "\n#Start Block %s\n", block_name);
+  const gboolean res = self->generate(self, cfg, args, result, reference);
+  g_string_append_printf(result, "\n#End Block %s\n", block_name);
+
+  return res;
 }
 
 void

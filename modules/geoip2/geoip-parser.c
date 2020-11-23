@@ -96,6 +96,10 @@ maxminddb_parser_process(LogParser *s, LogMessage **pmsg,
 {
   GeoIPParser *self = (GeoIPParser *) s;
   LogMessage *msg = log_msg_make_writable(pmsg, path_options);
+  msg_trace("geoip2-parser message processing started",
+            evt_tag_str ("input", input),
+            evt_tag_str ("prefix", self->prefix),
+            evt_tag_printf("msg", "%p", *pmsg));
 
   MMDB_entry_data_list_s *entry_data_list;
   if (!_mmdb_load_entry_data_list(self, input, &entry_data_list))
@@ -135,7 +139,11 @@ maxminddb_parser_free(LogPipe *s)
 
   g_free(self->database_path);
   g_free(self->prefix);
-  g_free(self->database);
+  if (self->database)
+    {
+      MMDB_close(self->database);
+      g_free(self->database);
+    }
 
   log_parser_free_method(s);
 }

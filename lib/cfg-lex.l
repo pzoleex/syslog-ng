@@ -117,14 +117,13 @@ yy_input_run_backtick_substitution(CfgLexer *self, gchar *buf, gsize buf_size)
       }                                                                 \
   } while (0);                                                          \
   break;
-  
+
 #define YY_FATAL_ERROR(msg)						\
   do {									\
     struct yyguts_t * __yyg = (struct yyguts_t*) yyscanner;		\
                                                                         \
     msg_error("Fatal error in configuration lexer, giving up",		\
-              evt_tag_str("error", msg),				\
-              NULL);							\
+              evt_tag_str("error", msg));							\
     longjmp(__yyg->yyextra_r->fatal_error, 1);				\
   } while(0)
 
@@ -132,10 +131,16 @@ yy_input_run_backtick_substitution(CfgLexer *self, gchar *buf, gsize buf_size)
 static void
 _cfg_lex_new_line(CfgLexer *lexer)
 {
-  lexer->include_stack[lexer->include_depth].lloc.first_line++;
-  lexer->include_stack[lexer->include_depth].lloc.last_line++;
-  lexer->include_stack[lexer->include_depth].lloc.first_column = 1;
-  lexer->include_stack[lexer->include_depth].lloc.last_column = 1;
+  CfgIncludeLevel *level = &lexer->include_stack[lexer->include_depth];
+
+  /* if the last token span multiple lines (e.g.  block references), it
+   * might happen that last_line != first_line, in that case, initialize the
+   * first_line of the token to the subsequent line after last_line */
+
+  level->lloc.first_line = level->lloc.last_line + 1;
+  level->lloc.last_line = level->lloc.first_line;
+  level->lloc.first_column = 1;
+  level->lloc.last_column = 1;
 }
 
 %}
@@ -193,6 +198,7 @@ word	[^ \#'"\(\)\{\}\[\]\\;\r\n\t,|\.@:]
                            }
 {white}+		   ;
 \.\.                       { return LL_DOTDOT; }
+\.\.\.                     { return LL_DOTDOTDOT; }
 (-|\+)?{digit}+\.{digit}+  { yylval->fnum = strtod(yytext, NULL); return LL_FLOAT; }
 0x{xdigit}+ 		   { yylval->num = strtoll(yytext + 2, NULL, 16); return LL_NUMBER; }
 0{odigit}+		   { yylval->num = strtoll(yytext + 1, NULL, 8); return LL_NUMBER; }
@@ -248,6 +254,9 @@ word	[^ \#'"\(\)\{\}\[\]\\;\r\n\t,|\.@:]
      /* rules to parse a block as a LL_BLOCK token */
 <block>{white}+            ;
 <block>[^{( \t]+           { return LL_ERROR; }
+<block>\({white}*\)        { yy_pop_state(yyscanner); yylval->cptr = NULL; return LL_BLOCK; }
+<block>\({white}*\"\"{white}*\) { yy_pop_state(yyscanner); yylval->cptr = g_strdup(""); return LL_BLOCK; }
+<block>\({white}*\'\'{white}*\) { yy_pop_state(yyscanner); yylval->cptr = g_strdup(""); return LL_BLOCK; }
 <block>[{(]                {
                              if (yytext[0] != yyextra->block_boundary[0])
                                REJECT;

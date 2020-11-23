@@ -21,16 +21,22 @@
  *
  */
 
+#include "diskq.h"
+
 #include "driver.h"
 #include "messages.h"
-
-#include "diskq.h"
 #include "logqueue-disk.h"
 #include "logqueue-disk-reliable.h"
 #include "logqueue-disk-non-reliable.h"
 #include "persist-state.h"
 
 #define DISKQ_PLUGIN_NAME "diskq"
+
+struct _DiskQDestPlugin
+{
+  LogDriverPlugin super;
+  DiskQueueOptions options;
+};
 
 static gboolean
 log_queue_disk_is_file_in_directory(const gchar *file, const gchar *directory)
@@ -140,7 +146,7 @@ _attach(LogDriverPlugin *s, LogDriver *d)
   if (self->options.disk_buf_size < MIN_DISK_BUF_SIZE && self->options.disk_buf_size != 0)
     {
       msg_warning("The value of 'disk_buf_size()' is too low, setting to the smallest acceptable value",
-                  evt_tag_int("min_space", MIN_DISK_BUF_SIZE));
+                  evt_tag_long("min_space", MIN_DISK_BUF_SIZE));
       self->options.disk_buf_size = MIN_DISK_BUF_SIZE;
     }
 
@@ -161,8 +167,13 @@ _free(LogDriverPlugin *s)
 {
   DiskQDestPlugin *self = (DiskQDestPlugin *)s;
   disk_queue_options_destroy(&self->options);
+  log_driver_plugin_free_method(s);
 }
 
+DiskQueueOptions *diskq_get_options(DiskQDestPlugin *self)
+{
+  return &self->options;
+}
 
 DiskQDestPlugin *
 diskq_dest_plugin_new(void)

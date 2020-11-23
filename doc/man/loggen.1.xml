@@ -8,7 +8,7 @@
     <refmeta>
       <refentrytitle>loggen</refentrytitle>
       <manvolnum>1</manvolnum>
-      <refmiscinfo class="version">3.15</refmiscinfo>
+      <refmiscinfo class="version">3.17</refmiscinfo>
       <refmiscinfo class="source"/>
     </refmeta>
     <refnamediv>
@@ -191,7 +191,7 @@
             <command>--skip-tokens &lt;number&gt;</command>
           </term>
           <listitem>
-            <para>Skip the specified number of space-separated tokens (words) at the beginning of every line. For example, if the messages in the file look like <parameter>foo bar message</parameter>, <parameter>--skip-tokens 2</parameter> skips the <parameter>foo bar</parameter> part of the line, and sends only the <parameter>message</parameter> part. Works only when used together with the <parameter>--read-file</parameter> parameter. Default value: 3</para>
+            <para>Skips the specified number of space-separated tokens (words) at the beginning of every line. For example, if the messages in the file look like <parameter>foo bar message</parameter>, <parameter>--skip-tokens 2</parameter> skips the <parameter>foo bar</parameter> part of the line, and sends only the <parameter>message</parameter> part. Works only when used together with the <parameter>--read-file</parameter> parameter. Default value: 0</para>
           </listitem>
         </varlistentry>
         <varlistentry>
@@ -234,7 +234,7 @@
     <refsection>
       <title>Examples</title>
       <para>The following command generates 100 messages per second for ten minutes, and sends them to port 2010 of the localhost via TCP. Each message is 300 bytes long.</para>
-      <synopsis>loggen --size 300 --rate 100 --interval 600 127.0.0.1 2010</synopsis>
+      <synopsis>loggen --stream --size 300 --rate 100 --interval 600 127.0.0.1 2010</synopsis>
       <para>The following command is similar to the one above, but uses the UDP protocol.</para>
       <synopsis>loggen --inet --dgram --size 300 --rate 100 --interval 600 127.0.0.1 2010</synopsis>
       <para>Send a single message on TCP6 to the <parameter>::1</parameter> IPv6 address, port <parameter>1061</parameter>:</para>
@@ -258,7 +258,7 @@
         <link linkend="syslog-ng.conf.5"><command>syslog-ng.conf</command>(5)</link>
       </para>
       <note version="5.0">
-        <para>For the detailed documentation of  see <link xmlns:ns1="http://www.w3.org/1999/xlink" ns1:href="https://www.balabit.com/documents/syslog-ng-ose-latest-guides/en/syslog-ng-ose-guide-admin/html/index.html"><command>The  3.15 Administrator Guide</command></link></para>
+        <para>For the detailed documentation of  see <link xmlns:ns1="http://www.w3.org/1999/xlink" ns1:href="https://www.balabit.com/documents/syslog-ng-ose-latest-guides/en/syslog-ng-ose-guide-admin/html/index.html"><command>The  3.17 Administrator Guide</command></link></para>
         <para>If you experience any problems or need help with syslog-ng, visit the <link xmlns:ns1="http://www.w3.org/1999/xlink" ns1:href="https://lists.balabit.hu/mailman/listinfo/syslog-ng"><command>syslog-ng mailing list</command></link>.</para>
         <para>For news and notifications about of syslog-ng, visit the <link xmlns:ns1="http://www.w3.org/1999/xlink" ns1:href="https://syslog-ng.org/blogs/"><command>syslog-ng blogs</command></link>.</para>
       </note>

@@ -200,7 +200,7 @@ Test(logqueue, test_zero_diskbuf_and_normal_acks)
 
   log_queue_set_use_backlog(q, TRUE);
 
-  cr_assert_eq(q->queued_messages->value, 0);
+  cr_assert_eq(atomic_gssize_racy_get(&q->queued_messages->value), 0);
 
   fed_messages = 0;
   acked_messages = 0;
@@ -283,4 +283,29 @@ Test(logqueue, test_with_threads)
       log_queue_unref(q);
     }
   fprintf(stderr, "Feed speed: %.2lf\n", (double) TEST_RUNS * MESSAGES_SUM * 1000000 / sum_time);
+}
+
+Test(logqueue, log_queue_fifo_rewind_all_and_memory_usage)
+{
+  LogQueue *q = log_queue_fifo_new(OVERFLOW_SIZE, NULL);
+  log_queue_set_use_backlog(q, TRUE);
+
+  StatsClusterKey sc_key;
+  stats_lock();
+  stats_cluster_logpipe_key_set(&sc_key, SCS_DESTINATION, q->persist_name, NULL );
+  stats_register_counter(1, &sc_key, SC_TYPE_MEMORY_USAGE, &q->memory_usage);
+  stats_unlock();
+
+  feed_some_messages(q, 1, &parse_options);
+  gint size_when_single_msg = stats_counter_get(q->memory_usage);
+
+  feed_some_messages(q, 9, &parse_options);
+  cr_assert_eq(stats_counter_get(q->memory_usage), 10*size_when_single_msg);
+
+  send_some_messages(q, 10);
+  cr_assert_eq(stats_counter_get(q->memory_usage), 0);
+  log_queue_rewind_backlog_all(q);
+  cr_assert_eq(stats_counter_get(q->memory_usage), 10*size_when_single_msg);
+
+  log_queue_unref(q);
 }

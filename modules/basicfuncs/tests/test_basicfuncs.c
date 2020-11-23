@@ -172,6 +172,10 @@ Test(basicfuncs, test_str_funcs)
   assert_template_format("$(padding foo 10)", "       foo");
   assert_template_format("$(padding foo 10 x)", "xxxxxxxfoo");
   assert_template_format("$(padding foo 10 abc)", "abcabcafoo");
+  assert_template_format("$(padding foo 2)", "foo");        // longer macro than padding
+  assert_template_format("$(padding foo 3)", "foo");        // len(macro) == padding length
+  assert_template_format("$(padding foo 6 abc)", "abcfoo"); // len(padding string) == padding length
+  assert_template_format("$(padding foo 4 '')", " foo");    // padding string == ''
 
   assert_template_failure("$(binary)", "Incorrect parameters");
   assert_template_failure("$(binary abc)", "unable to parse abc");
@@ -180,6 +184,18 @@ Test(basicfuncs, test_str_funcs)
   assert_template_format("$(binary 1 0x1)", "\1\1");
   assert_template_format("$(binary 0xFF 255 0377)", "\xFF\xFF\xFF");
   assert_template_format_with_len("$(binary 0xFF 0x00 0x40)", "\xFF\000@", 3);
+
+  assert_template_format("[$(base64-encode)]", "[]");
+  assert_template_format("[$(base64-encode abc)]", "[YWJj]");
+  assert_template_format("[$(base64-encode abcxyz)]", "[YWJjeHl6]");
+  assert_template_format("[$(base64-encode abcd)]", "[YWJjZA==]");
+  assert_template_format("[$(base64-encode abcdabcdabcdabcd)]", "[YWJjZGFiY2RhYmNkYWJjZA==]");
+  assert_template_format("[$(base64-encode abcd abcd abcd abcd)]", "[YWJjZGFiY2RhYmNkYWJjZA==]");
+  assert_template_format("[$(base64-encode 'X X')]", "[WCBY]");
+  assert_template_format("[$(base64-encode xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx)]",
+                         "[eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4"
+                         "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4"
+                         "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHg=]");
 }
 
 Test(basicfuncs, test_numeric_funcs)
@@ -391,4 +407,13 @@ Test(basicfuncs, test_context_funcs)
   assert_template_format_with_context("$(context-values ${PID})", "23323,23323");
   assert_template_format_with_context("$(context-values ${comma_value})",
                                       "\"value,with,a,comma\",\"value,with,a,comma\"");
+}
+
+
+Test(basicfuncs, test_tfurlencode)
+{
+  assert_template_format("$(urlencode '')", "");
+  assert_template_format("$(urlencode test)", "test");
+  assert_template_format("$(urlencode <>)", "%3C%3E");
+  assert_template_format("$(urlencode &)", "%26");
 }

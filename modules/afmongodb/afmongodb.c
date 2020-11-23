@@ -89,7 +89,7 @@ afmongodb_dd_set_value_pairs(LogDriver *d, ValuePairs *vp)
  */
 
 static gchar *
-_format_instance_id(const LogThrDestDriver *d, const gchar *format)
+_format_instance_id(const LogThreadedDestDriver *d, const gchar *format)
 {
   const MongoDBDestDriver *self = (const MongoDBDestDriver *)d;
   static gchar args[1024];
@@ -125,8 +125,8 @@ _format_instance_id(const LogThrDestDriver *d, const gchar *format)
   return id;
 }
 
-static gchar *
-_format_stats_instance(LogThrDestDriver *d)
+static const gchar *
+_format_stats_instance(LogThreadedDestDriver *d)
 {
   return _format_instance_id(d, "mongodb,%s");
 }
@@ -134,14 +134,14 @@ _format_stats_instance(LogThrDestDriver *d)
 static const gchar *
 _format_persist_name(const LogPipe *s)
 {
-  const LogThrDestDriver *self = (const LogThrDestDriver *)s;
+  const LogThreadedDestDriver *self = (const LogThreadedDestDriver *)s;
 
   return s->persist_name ? _format_instance_id(self, "afmongodb.%s")
          : _format_instance_id(self, "afmongodb(%s)");
 }
 
 static void
-_worker_disconnect(LogThrDestDriver *s)
+_worker_disconnect(LogThreadedDestDriver *s)
 {
   MongoDBDestDriver *self = (MongoDBDestDriver *)s;
 
@@ -360,19 +360,8 @@ _vp_process_value(const gchar *name, const gchar *prefix, TypeHint type,
   return FALSE;
 }
 
-static void
-_worker_retry_over_message(LogThrDestDriver *s, LogMessage *msg)
-{
-  MongoDBDestDriver *self = (MongoDBDestDriver *)s;
-
-  msg_error("Dropped message",
-            evt_tag_str("driver", self->super.super.super.id),
-            evt_tag_value_pairs("message", self->vp, msg, self->super.seq_num,
-                                LTZ_SEND, &self->template_options));
-}
-
 static worker_insert_result_t
-_worker_insert(LogThrDestDriver *s, LogMessage *msg)
+_worker_insert(LogThreadedDestDriver *s, LogMessage *msg)
 {
   MongoDBDestDriver *self = (MongoDBDestDriver *)s;
   gboolean success;
@@ -476,7 +465,7 @@ afmongodb_dd_private_uri_init(LogDriver *d)
 }
 
 static void
-_worker_thread_init(LogThrDestDriver *d)
+_worker_thread_init(LogThreadedDestDriver *d)
 {
   MongoDBDestDriver *self = (MongoDBDestDriver *)d;
 
@@ -488,7 +477,7 @@ _worker_thread_init(LogThrDestDriver *d)
 }
 
 static void
-_worker_thread_deinit(LogThrDestDriver *d)
+_worker_thread_deinit(LogThreadedDestDriver *d)
 {
   MongoDBDestDriver *self = (MongoDBDestDriver *)d;
 
@@ -533,7 +522,7 @@ _init(LogPipe *s)
   if (!afmongodb_dd_private_uri_init(&self->super.super.super))
     return FALSE;
 
-  return log_threaded_dest_driver_start(s);
+  return log_threaded_dest_driver_init_method(s);
 }
 
 static void
@@ -563,14 +552,6 @@ _free(LogPipe *d)
   log_threaded_dest_driver_free(d);
 }
 
-static void
-_logthrdest_queue_method(LogThrDestDriver *d)
-{
-  MongoDBDestDriver *self = (MongoDBDestDriver *)d;
-
-  self->last_msg_stamp = cached_g_current_time_sec();
-}
-
 /*
  * Plugin glue.
  */
@@ -587,15 +568,13 @@ afmongodb_dd_new(GlobalConfig *cfg)
   self->super.super.super.super.init = _init;
   self->super.super.super.super.free_fn = _free;
   self->super.super.super.super.generate_persist_name = _format_persist_name;
-  self->super.queue_method = _logthrdest_queue_method;
 
   self->super.worker.thread_init = _worker_thread_init;
   self->super.worker.thread_deinit = _worker_thread_deinit;
   self->super.worker.disconnect = _worker_disconnect;
   self->super.worker.insert = _worker_insert;
-  self->super.format.stats_instance = _format_stats_instance;
+  self->super.format_stats_instance = _format_stats_instance;
   self->super.stats_source = SCS_MONGODB;
-  self->super.messages.retry_over = _worker_retry_over_message;
 
 #if SYSLOG_NG_ENABLE_LEGACY_MONGODB_OPTIONS
   afmongodb_dd_init_legacy(self);
